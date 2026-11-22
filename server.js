@@ -1,6 +1,7 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
@@ -9,17 +10,17 @@ const io = new Server(server, {
     pingInterval: 25000
 });
 
-app.get('/', (req, res) => res.sendFile(__dirname + '/index.html'));
+// Раздача статических файлов (включая plus2.mp3, plus4.mp3, uno.mp3, wild.mp3)
+app.use(express.static(__dirname));
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
 const colors = ['red', 'blue', 'green', 'yellow'];
 let deck = [];
-let discardPile = [];
 let players = [];
 let currentCard = null;
 let turnIndex = 0;
 let direction = 1;
 let gameStarted = false;
-let roundNumber = 1;
 const TARGET_SCORE = 250;
 
 function createDeck() {
@@ -40,33 +41,17 @@ function createDeck() {
         deck.push({ color: 'black', value: '🌈', type: 'wild', points: 50 });
         deck.push({ color: 'black', value: '+4', type: 'wild4', points: 50 });
     }
-    shuffle(deck);
-}
-
-function shuffle(array) {
-    for (let i = array.length - 1; i > 0; i--) {
+    for (let i = deck.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
+        [deck[i], deck[j]] = [deck[j], deck[i]];
     }
 }
 
 function drawFromDeck(count) {
     let drawn = [];
     for (let i = 0; i < count; i++) {
-        if (deck.length === 0) {
-            if (discardPile.length > 1) {
-                const top = discardPile.pop();
-                deck = discardPile.map(c => ({
-                    ...c,
-                    color: (c.type === 'wild' || c.type === 'wild4') ? 'black' : c.color
-                }));
-                discardPile = [top];
-                shuffle(deck);
-            } else {
-                createDeck();
-            }
-        }
-        if (deck.length > 0) drawn.push(deck.pop());
+        if (deck.length === 0) createDeck();
+        drawn.push(deck.pop());
     }
     return drawn;
 }
@@ -74,33 +59,32 @@ function drawFromDeck(count) {
 function getNextIndex(steps = 1) {
     const len = players.length;
     if (len === 0) return 0;
-    return (turnIndex + steps * direction + len * 20) % len;
+    return (turnIndex + steps * direction + len * 100) % len;
 }
 
-function broadcastState(soundEvent = null) {
+function broadcastState() {
     players.forEach((player, index) => {
-        if (!player.connected) return;
-        const otherPlayers = players.map((p, idx) => ({
+        if (!player.socketId) return;
+        const playersList = players.map((p, idx) => ({
+            id: p.id,
             name: p.name,
             count: p.hand.length,
             score: p.score,
             saidUno: p.saidUno,
             isTurn: gameStarted && idx === turnIndex,
             isMe: idx === index,
-            connected: p.connected
+            disconnected: !p.socketId
         }));
 
-        io.to(player.id).emit('gameState', {
+        io.to(player.socketId).emit('gameState', {
             gameStarted,
-            roundNumber,
-            targetScore: TARGET_SCORE,
             hand: player.hand,
-            playersList: otherPlayers,
+            playersList,
             saidUno: player.saidUno,
             currentCard,
             direction,
-            isMyTurn: gameStarted && index === turnIndex,
-            soundEvent
+            targetScore: TARGET_SCORE,
+            isMyTurn: gameStarted && index === turnIndex
         });
     });
 }
@@ -108,9 +92,8 @@ function broadcastState(soundEvent = null) {
 function startNewRound() {
     gameStarted = true;
     direction = 1;
-    turnIndex = (roundNumber - 1) % players.length;
+    turnIndex = 0;
     createDeck();
-    discardPile = [];
 
     players.forEach(p => {
         p.hand = drawFromDeck(7);
@@ -120,48 +103,42 @@ function startNewRound() {
     do {
         currentCard = deck.pop();
     } while (currentCard.color === 'black');
-    discardPile.push(currentCard);
 
-    broadcastState('start');
+    broadcastState();
 }
 
 io.on('connection', (socket) => {
-    socket.on('joinGame', ({ name, playerId }) => {
-        const cleanName = (name || '').trim().slice(0, 14) || `Игрок ${players.length + 1}`;
-        
-        // Проверяем, не переподключается ли это вылетевший игрок
-        let existing = players.find(p => p.playerId === playerId);
+    socket.on('joinGame', ({ playerId, playerName }) => {
+        if (!playerId) return;
+
+        // Проверка переподключения существующего игрока
+        const existing = players.find(p => p.id === playerId);
         if (existing) {
             if (existing.disconnectTimer) {
                 clearTimeout(existing.disconnectTimer);
                 existing.disconnectTimer = null;
             }
-            existing.id = socket.id;
-            existing.connected = true;
-            if (name && name.trim()) existing.name = cleanName;
-            
-            io.emit('chatMessage', { sender: 'Система', text: `✅ ${existing.name} вернулся в игру!`, isSystem: true });
+            existing.socketId = socket.id;
+            if (playerName && playerName.trim()) {
+                existing.name = playerName.trim().slice(0, 15);
+            }
             broadcastState();
             return;
         }
 
-        if (gameStarted) {
-            socket.emit('errorMsg', 'Матч уже идет. Дождитесь окончания или попросите хоста перезапустить.');
-            return;
-        }
-        if (players.length >= 8) {
-            socket.emit('errorMsg', 'За столом уже максимум (8 игроков).');
+        if (gameStarted || players.length >= 8) {
+            socket.emit('errorMsg', 'Игра уже идет или стол заполнен (максимум 8 игроков).');
             return;
         }
 
+        const cleanName = (playerName || '').trim().slice(0, 15) || `Игрок ${players.length + 1}`;
         players.push({
-            id: socket.id,
-            playerId: playerId || socket.id,
+            id: playerId,
+            socketId: socket.id,
             name: cleanName,
             hand: [],
             score: 0,
             saidUno: false,
-            connected: true,
             disconnectTimer: null
         });
         broadcastState();
@@ -169,23 +146,24 @@ io.on('connection', (socket) => {
 
     socket.on('startGame', () => {
         if (gameStarted || players.length < 2) return;
-        roundNumber = 1;
         players.forEach(p => p.score = 0);
         startNewRound();
+        io.emit('playSound', 'start');
     });
 
     socket.on('sayUno', () => {
-        const p = players.find(p => p.id === socket.id);
+        const p = players.find(p => p.socketId === socket.id);
         if (p && p.hand.length <= 2 && !p.saidUno) {
             p.saidUno = true;
             io.emit('chatMessage', { sender: 'Система', text: `🔥 ${p.name} кричит УНО!`, isSystem: true });
-            broadcastState('uno');
+            io.emit('playSound', 'uno');
+            broadcastState();
         }
     });
 
     socket.on('playCard', ({ cardIndex, chosenColor }) => {
         if (!gameStarted) return;
-        const pIndex = players.findIndex(p => p.id === socket.id);
+        const pIndex = players.findIndex(p => p.socketId === socket.id);
         if (pIndex !== turnIndex) return;
 
         const player = players[pIndex];
@@ -204,49 +182,43 @@ io.on('connection', (socket) => {
         if (card.color === 'black' && colors.includes(chosenColor)) {
             currentCard.color = chosenColor;
         }
-        discardPile.push(currentCard);
 
-        // Проверка конца раунда
+        // Проверка окончания раунда и забытого УНО
         if (player.hand.length === 0) {
             if (!player.saidUno) {
                 player.hand.push(...drawFromDeck(2));
-                io.to(player.id).emit('alertMsg', 'Забыли нажать УНО! Штраф +2 карты.');
-                broadcastState('penalty');
-                return;
+                io.to(player.socketId).emit('alertMsg', 'Вы забыли нажать УНО! Штраф +2 карты.');
+                io.emit('playSound', 'plus2');
             } else {
+                // Подсчет очков за карты на руках у соперников
                 let roundPoints = 0;
-                players.forEach((p, idx) => {
+                players.forEach((other, idx) => {
                     if (idx !== pIndex) {
-                        roundPoints += p.hand.reduce((sum, c) => sum + c.points, 0);
+                        other.hand.forEach(c => roundPoints += (c.points || 0));
                     }
                 });
                 player.score += roundPoints;
 
-                const standings = [...players]
-                    .sort((a, b) => b.score - a.score)
-                    .map(p => ({ name: p.name, score: p.score }));
+                const scoreboard = players
+                    .map(p => ({ name: p.name, score: p.score }))
+                    .sort((a, b) => b.score - a.score);
 
                 if (player.score >= TARGET_SCORE) {
                     io.emit('matchOver', {
                         winner: player.name,
                         roundPoints,
-                        standings
+                        scoreboard
                     });
-                    resetGame();
+                    resetFullMatch();
                 } else {
-                    gameStarted = false;
                     io.emit('roundOver', {
                         winner: player.name,
                         roundPoints,
-                        standings,
-                        nextRound: roundNumber + 1
+                        scoreboard
                     });
                     setTimeout(() => {
-                        if (players.length >= 2 && !gameStarted) {
-                            roundNumber++;
-                            startNewRound();
-                        }
-                    }, 6000);
+                        if (players.length >= 2) startNewRound();
+                    }, 4500);
                 }
                 return;
             }
@@ -254,8 +226,9 @@ io.on('connection', (socket) => {
 
         if (player.hand.length > 1) player.saidUno = false;
 
-        let sound = 'card';
+        // Обработка спецкарт и звуков
         if (card.type === 'reverse') {
+            io.emit('playSound', 'card');
             if (players.length === 2) {
                 turnIndex = getNextIndex(2);
             } else {
@@ -263,39 +236,79 @@ io.on('connection', (socket) => {
                 turnIndex = getNextIndex(1);
             }
         } else if (card.type === 'skip') {
+            io.emit('playSound', 'card');
             turnIndex = getNextIndex(2);
         } else if (card.type === 'draw2') {
-            const victim = players[getNextIndex(1)];
+            const victimIndex = getNextIndex(1);
+            const victim = players[victimIndex];
             victim.hand.push(...drawFromDeck(2));
             victim.saidUno = false;
-            io.to(victim.id).emit('playSound', 'penalty');
+
+            io.emit('playSound', 'plus2');
+            // Автоматический стикер жертве
+            if (victim.socketId) {
+                io.to(victim.socketId).emit('tauntSticker', {
+                    sender: player.name,
+                    emoji: '😈',
+                    text: 'Лови +2!',
+                    isPrivate: true
+                });
+            }
+            io.to(player.socketId).emit('chatMessage', {
+                sender: 'Система',
+                text: `Вы подкинули +2 игроку ${victim.name}`,
+                isSystem: true
+            });
+
             turnIndex = getNextIndex(2);
         } else if (card.type === 'wild4') {
-            const victim = players[getNextIndex(1)];
+            const victimIndex = getNextIndex(1);
+            const victim = players[victimIndex];
             victim.hand.push(...drawFromDeck(4));
             victim.saidUno = false;
-            io.to(victim.id).emit('playSound', 'penalty');
+
+            io.emit('playSound', 'plus4');
+            // Автоматический стикер жертве
+            if (victim.socketId) {
+                io.to(victim.socketId).emit('tauntSticker', {
+                    sender: player.name,
+                    emoji: '💀',
+                    text: 'Лови +4!',
+                    isPrivate: true
+                });
+            }
+            io.to(player.socketId).emit('chatMessage', {
+                sender: 'Система',
+                text: `Вы подкинули +4 игроку ${victim.name}`,
+                isSystem: true
+            });
+
             turnIndex = getNextIndex(2);
+        } else if (card.type === 'wild') {
+            io.emit('playSound', 'wild');
+            turnIndex = getNextIndex(1);
         } else {
+            io.emit('playSound', 'card');
             turnIndex = getNextIndex(1);
         }
 
-        broadcastState(sound);
+        broadcastState();
     });
 
     socket.on('drawCard', () => {
         if (!gameStarted) return;
-        const pIndex = players.findIndex(p => p.id === socket.id);
+        const pIndex = players.findIndex(p => p.socketId === socket.id);
         if (pIndex !== turnIndex) return;
 
         players[pIndex].hand.push(...drawFromDeck(1));
         players[pIndex].saidUno = false;
+        io.emit('playSound', 'card');
         turnIndex = getNextIndex(1);
-        broadcastState('card');
+        broadcastState();
     });
 
     socket.on('sendChat', (text) => {
-        const p = players.find(p => p.id === socket.id);
+        const p = players.find(p => p.socketId === socket.id);
         if (!p || !text) return;
         const cleanText = String(text).trim().slice(0, 80);
         if (cleanText) {
@@ -303,60 +316,77 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('sendSticker', (sticker) => {
-        const p = players.find(p => p.id === socket.id);
-        if (!p || !sticker) return;
-        io.emit('showSticker', { sender: p.name, sticker });
+    socket.on('sendTaunt', ({ targetId, emoji, text }) => {
+        const sender = players.find(p => p.socketId === socket.id);
+        if (!sender) return;
+
+        if (!targetId || targetId === 'all') {
+            io.emit('tauntSticker', {
+                sender: sender.name,
+                emoji,
+                text,
+                isPrivate: false
+            });
+        } else {
+            const target = players.find(p => p.id === targetId);
+            if (target && target.socketId) {
+                io.to(target.socketId).emit('tauntSticker', {
+                    sender: sender.name,
+                    emoji,
+                    text,
+                    isPrivate: true
+                });
+                io.to(sender.socketId).emit('chatMessage', {
+                    sender: 'Система',
+                    text: `Стикер ${emoji} "${text}" отправлен лично для ${target.name}`,
+                    isSystem: true
+                });
+            }
+        }
     });
 
     socket.on('disconnect', () => {
-        const p = players.find(p => p.id === socket.id);
-        if (!p) return;
+        const pIndex = players.findIndex(p => p.socketId === socket.id);
+        if (pIndex === -1) return;
 
-        p.connected = false;
+        const player = players[pIndex];
+        player.socketId = null;
         broadcastState();
 
-        if (!gameStarted) {
-            // В лобби ждем 10 секунд перед удалением
-            p.disconnectTimer = setTimeout(() => {
-                const idx = players.indexOf(p);
-                if (idx !== -1 && !players[idx].connected) {
-                    players.splice(idx, 1);
+        // Ждем 45 секунд перед полным удалением игрока
+        player.disconnectTimer = setTimeout(() => {
+            const currentIdx = players.findIndex(p => p.id === player.id);
+            if (currentIdx !== -1 && !players[currentIdx].socketId) {
+                const leftName = players[currentIdx].name;
+                players.splice(currentIdx, 1);
+
+                if (gameStarted) {
+                    if (players.length < 2) {
+                        io.emit('errorMsg', `Игрок ${leftName} не вернулся. Недостаточно игроков для продолжения.`);
+                        resetFullMatch();
+                    } else {
+                        if (turnIndex >= players.length) turnIndex = 0;
+                        io.emit('chatMessage', { sender: 'Система', text: `⚠️ ${leftName} покинул стол.`, isSystem: true });
+                        broadcastState();
+                    }
+                } else {
                     broadcastState();
                 }
-            }, 10000);
-        } else {
-            // В активной игре даем 45 секунд на автопереподключение (например, если свернул браузер на телефоне)
-            io.emit('chatMessage', { sender: 'Система', text: `⚠️ У ${p.name} пропала связь. Ждем возвращения (45 сек)...`, isSystem: true });
-            p.disconnectTimer = setTimeout(() => {
-                if (!p.connected && gameStarted) {
-                    io.emit('chatMessage', { sender: 'Система', text: `❌ ${p.name} не вернулся и исключен из матча.`, isSystem: true });
-                    const idx = players.indexOf(p);
-                    if (idx !== -1) {
-                        const wasHisTurn = (idx === turnIndex);
-                        players.splice(idx, 1);
-                        if (players.length < 2) {
-                            io.emit('errorMsg', 'Осталось меньше 2 игроков. Матч завершен.');
-                            resetGame();
-                        } else {
-                            if (idx < turnIndex) turnIndex--;
-                            if (turnIndex >= players.length) turnIndex = 0;
-                            broadcastState();
-                        }
-                    }
-                }
-            }, 45000);
-        }
+            }
+        }, 45000);
     });
 });
 
-function resetGame() {
-    players.forEach(p => { if (p.disconnectTimer) clearTimeout(p.disconnectTimer); });
+function resetFullMatch() {
+    players.forEach(p => {
+        if (p.disconnectTimer) clearTimeout(p.disconnectTimer);
+    });
     players = [];
     gameStarted = false;
     currentCard = null;
-    roundNumber = 1;
+    turnIndex = 0;
+    direction = 1;
 }
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`UNO 8-Players + AutoReconnect запущен: http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`Сервер UNO запущен на порту ${PORT}`));

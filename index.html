@@ -3,283 +3,324 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>UNO Online (до 250 очков)</title>
+    <title>Онлайн UNO (до 8 игроков)</title>
     <style>
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body {
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: radial-gradient(circle at center, #1b5e20 0%, #0a290d 100%);
             color: white; margin: 0; height: 100dvh;
             display: flex; flex-direction: column; justify-content: space-between;
             user-select: none; overflow: hidden;
         }
 
-        /* Плашка переподключения */
+        /* Баннер переподключения */
         #reconnectBanner {
-            display: none; position: fixed; top: 0; left: 0; right: 0;
-            background: #e67e22; color: #fff; text-align: center;
-            padding: 6px; font-size: 13px; font-weight: bold; z-index: 300;
+            display: none; position: fixed; top: 0; left: 0; width: 100%;
+            background: #e67e22; color: #fff; text-align: center; padding: 6px;
+            font-weight: bold; font-size: 13px; z-index: 300;
         }
 
         /* Кнопка звука */
         #soundToggle {
-            position: fixed; top: 8px; right: 8px; z-index: 90;
-            background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.3);
-            color: white; border-radius: 50%; width: 36px; height: 36px;
+            position: fixed; top: 10px; right: 10px; z-index: 120;
+            background: rgba(0,0,0,0.55); border: 2px solid rgba(255,255,255,0.4);
+            color: white; border-radius: 50%; width: 38px; height: 38px;
             font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center;
         }
 
         /* Экран входа */
         #loginScreen {
             position: fixed; inset: 0; background: rgba(0,0,0,0.9);
-            display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 200; padding: 20px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 200;
+            padding: 20px;
         }
         .uno-logo-title {
-            font-size: 54px; font-weight: 900; color: #f1c40f;
-            text-shadow: 4px 4px 0 #e74c3c, -2px -2px 0 #000;
-            transform: rotate(-8deg); margin-bottom: 20px; letter-spacing: 2px;
+            font-size: 54px; font-weight: 900; font-style: italic;
+            color: #f1c40f; text-shadow: 4px 4px 0 #e74c3c, -2px -2px 0 #000;
+            margin-bottom: 20px; letter-spacing: 2px;
         }
         #loginScreen input {
             padding: 14px; font-size: 18px; border-radius: 10px; border: none;
             margin-bottom: 15px; text-align: center; width: 260px;
         }
         .btn-main {
-            padding: 14px 32px; font-size: 18px; font-weight: bold; border: none;
-            border-radius: 10px; background: linear-gradient(180deg, #f1c40f, #f39c12);
-            color: #111; cursor: pointer; box-shadow: 0 4px 15px rgba(243, 156, 18, 0.4);
+            padding: 13px 32px; font-size: 18px; font-weight: bold; border: none;
+            border-radius: 10px; background: linear-gradient(180deg, #f39c12, #d35400);
+            color: #fff; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
         }
 
         /* Верхняя панель игроков */
-        .top-bar { width: 100%; padding: 8px 46px 4px 8px; display: flex; flex-direction: column; align-items: center; }
-        .round-info { font-size: 12px; color: #f1c40f; font-weight: bold; margin-bottom: 4px; }
+        .top-bar {
+            display: flex; flex-direction: column; align-items: center;
+            padding: 8px 48px 4px 8px; width: 100%;
+        }
         .players-list {
-            display: flex; gap: 8px; overflow-x: auto; width: 100%;
-            padding: 4px; justify-content: flex-start; scrollbar-width: none;
+            display: flex; gap: 8px; overflow-x: auto; max-width: 100%;
+            padding-bottom: 4px; scrollbar-width: none;
         }
         .players-list::-webkit-scrollbar { display: none; }
-        @media (min-width: 768px) { .players-list { justify-content: center; } }
-
         .player-badge {
-            flex: 0 0 auto; background: rgba(0,0,0,0.55); padding: 6px 10px;
-            border-radius: 10px; border: 2px solid rgba(255,255,255,0.15);
-            text-align: center; font-size: 12px; min-width: 85px; transition: opacity 0.3s;
+            background: rgba(0,0,0,0.55); padding: 6px 10px; border-radius: 10px;
+            border: 2px solid rgba(255,255,255,0.15); text-align: center;
+            font-size: 12px; min-width: 85px; flex-shrink: 0;
         }
         .player-badge.active-turn {
             border-color: #f1c40f; background: rgba(241, 196, 15, 0.25);
             box-shadow: 0 0 10px rgba(241, 196, 15, 0.5);
         }
-        .player-badge.offline { opacity: 0.45; border-style: dashed; }
-        .uno-tag { background: #e74c3c; padding: 1px 5px; border-radius: 4px; font-size: 10px; font-weight: bold; }
-
-        /* Игровой стол */
-        .center-area { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: auto 0; }
-        .direction-indicator {
-            font-size: 12px; background: rgba(0,0,0,0.4); padding: 3px 12px; border-radius: 12px;
+        .player-badge.disconnected { opacity: 0.5; border-style: dashed; }
+        .uno-tag {
+            background: #e74c3c; color: #fff; padding: 1px 5px;
+            border-radius: 4px; font-size: 10px; font-weight: bold; display: inline-block;
         }
-        .table { display: flex; align-items: center; gap: 20px; }
 
-        /* ОРИГИНАЛЬНЫЙ СКИН КАРТ UNO */
+        /* Игровой стол по центру */
+        .center-area {
+            display: flex; flex-direction: column; align-items: center; gap: 8px;
+        }
+        .direction-indicator {
+            font-size: 13px; background: rgba(0,0,0,0.4);
+            padding: 4px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15);
+        }
+        .table { display: flex; align-items: center; gap: 22px; }
+
+        /* Оригинальный скин карт UNO */
         .uno-card {
-            width: 78px; height: 116px; border-radius: 11px;
+            width: 82px; height: 122px; border-radius: 12px;
             background: #fff; padding: 5px;
-            box-shadow: 0 5px 12px rgba(0,0,0,0.55);
+            box-shadow: 0 6px 14px rgba(0,0,0,0.6);
             position: relative; flex-shrink: 0;
             transition: transform 0.15s ease;
         }
-        .card-inner {
-            width: 100%; height: 100%; border-radius: 7px;
+        .uno-card-inner {
+            width: 100%; height: 100%; border-radius: 8px;
             position: relative; display: flex; align-items: center; justify-content: center;
             overflow: hidden;
         }
-        .card-oval {
-            width: 86%; height: 72%; background: #fff;
+        .uno-oval {
+            width: 88%; height: 74%; background: #fff;
             border-radius: 50%; transform: rotate(-28deg);
             display: flex; align-items: center; justify-content: center;
             box-shadow: inset 0 0 4px rgba(0,0,0,0.3);
         }
-        .card-center-val {
-            transform: rotate(28deg); font-size: 32px; font-weight: 900;
-            text-shadow: 2px 2px 0 #000, -1px -1px 0 #000;
+        .uno-oval-text {
+            transform: rotate(28deg); font-size: 34px; font-weight: 900;
+            font-style: italic; text-shadow: 2px 2px 0 #000;
         }
-        .corner-top, .corner-bottom {
-            position: absolute; font-size: 13px; font-weight: 900;
-            color: #fff; text-shadow: 1px 1px 0 #000; line-height: 1;
+        .corner-val {
+            position: absolute; font-size: 14px; font-weight: 900;
+            font-style: italic; color: #fff; text-shadow: 1px 1px 0 #000;
         }
-        .corner-top { top: 4px; left: 5px; }
-        .corner-bottom { bottom: 4px; right: 5px; transform: rotate(180deg); }
+        .corner-tl { top: 4px; left: 6px; }
+        .corner-br { bottom: 4px; right: 6px; transform: rotate(180deg); }
 
-        .bg-red { background: #d32f2f; } .txt-red { color: #d32f2f; }
-        .bg-blue { background: #1976d2; } .txt-blue { color: #1976d2; }
-        .bg-green { background: #388e3c; } .txt-green { color: #388e3c; }
-        .bg-yellow { background: #fbc02d; } .txt-yellow { color: #fbc02d; }
-        .bg-black { background: #212121; } .txt-black { color: #212121; }
+        .bg-red { background: #d32f2f; }
+        .txt-red { color: #d32f2f; }
+        .bg-blue { background: #1976d2; }
+        .txt-blue { color: #1976d2; }
+        .bg-green { background: #388e3c; }
+        .txt-green { color: #388e3c; }
+        .bg-yellow { background: #fbc02d; }
+        .txt-yellow { color: #f57f17; }
+        .bg-black { background: #1a1a1a; }
 
+        /* Четырехцветный овал для черных карт */
         .wild-oval {
             background: conic-gradient(#d32f2f 0deg 90deg, #1976d2 90deg 180deg, #fbc02d 180deg 270deg, #388e3c 270deg 360deg);
+            border: 2px solid #fff;
         }
-        .wild-oval .card-center-val { color: #fff; font-size: 24px; }
+        .wild-oval .uno-oval-text { color: #fff; font-size: 28px; }
 
-        .deck-back .card-inner { background: #181818; }
-        .deck-back .card-oval { background: #d32f2f; }
-        .deck-logo {
-            transform: rotate(28deg); color: #fbc02d; font-weight: 900;
-            font-size: 18px; text-shadow: 2px 2px 0 #000; letter-spacing: 1px;
-        }
+        /* Рубашка колоды */
         .deck-back { cursor: pointer; }
-        .deck-back:active { transform: scale(0.95); }
-
-        /* Всплывающий издевательский стикер по центру экрана */
-        #stickerOverlay {
-            position: fixed; inset: 0; pointer-events: none;
-            display: flex; align-items: center; justify-content: center; z-index: 160;
-        }
-        .sticker-popup {
-            background: rgba(0, 0, 0, 0.85); border: 3px solid #f1c40f;
-            border-radius: 24px; padding: 18px 28px; text-align: center;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
-            animation: popSticker 2.4s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
-        }
-        .sticker-emoji { font-size: 74px; line-height: 1.1; }
-        .sticker-title { font-size: 22px; font-weight: 900; color: #f1c40f; margin-top: 4px; text-transform: uppercase; }
-        .sticker-sender { font-size: 13px; color: #ccc; margin-top: 6px; }
-
-        @keyframes popSticker {
-            0% { transform: scale(0.2) rotate(-15deg); opacity: 0; }
-            15% { transform: scale(1.1) rotate(5deg); opacity: 1; }
-            25% { transform: scale(1) rotate(0deg); opacity: 1; }
-            80% { transform: scale(1) opacity: 1; }
-            100% { transform: scale(0.7) translateY(-30px); opacity: 0; }
+        .deck-back .uno-card-inner { background: #111; }
+        .deck-back .uno-oval { background: #d32f2f; border: 2px solid #fbc02d; }
+        .deck-back .uno-oval-text {
+            color: #fbc02d; font-size: 20px; letter-spacing: 1px;
+            text-shadow: 2px 2px 0 #000;
         }
 
-        /* Чат и панель стикеров */
-        .chat-box {
-            width: 96%; max-width: 440px; margin: 0 auto;
-            background: rgba(0,0,0,0.55); border-radius: 10px; padding: 6px 8px;
-            display: flex; flex-direction: column; gap: 4px;
+        /* Чат и адресные стикеры */
+        .social-panel {
+            width: 95%; max-width: 440px; margin: 0 auto;
+            background: rgba(0,0,0,0.55); border-radius: 12px; padding: 6px 8px;
+            display: flex; flex-direction: column; gap: 5px;
+            border: 1px solid rgba(255,255,255,0.12);
         }
         #chatMessages {
-            height: 44px; overflow-y: auto; font-size: 12px;
-            display: flex; flex-direction: column; gap: 2px;
+            height: 52px; overflow-y: auto; font-size: 12px;
+            display: flex; flex-direction: column; gap: 2px; text-align: left;
         }
-        .reactions-row {
-            display: flex; gap: 5px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px;
+        .taunt-controls {
+            display: flex; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none;
         }
-        .reactions-row::-webkit-scrollbar { display: none; }
-        .sticker-btn {
-            flex: 0 0 auto; background: linear-gradient(180deg, #ff5252, #b71c1c);
-            border: 1px solid rgba(255,255,255,0.4); border-radius: 8px;
-            color: white; font-size: 12px; font-weight: bold;
-            padding: 3px 8px; cursor: pointer;
+        .taunt-controls::-webkit-scrollbar { display: none; }
+        #tauntTarget {
+            background: #222; color: #f1c40f; border: 1px solid #555;
+            border-radius: 6px; padding: 3px 5px; font-size: 11px; font-weight: bold;
+            max-width: 95px; flex-shrink: 0;
         }
-        .sticker-btn:active { transform: scale(0.92); }
+        .taunt-btn {
+            background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.2);
+            color: #fff; border-radius: 6px; padding: 3px 7px; font-size: 11px;
+            cursor: pointer; white-space: nowrap; flex-shrink: 0;
+        }
+        .taunt-btn:active { transform: scale(0.95); }
+        .emoji-strip {
+            display: flex; justify-content: space-between; gap: 2px;
+        }
         .emoji-btn {
-            flex: 0 0 auto; background: rgba(255,255,255,0.15); border: none;
-            border-radius: 6px; font-size: 15px; cursor: pointer; padding: 2px 6px;
+            background: none; border: none; font-size: 16px; cursor: pointer; padding: 1px 3px;
         }
         .chat-input-row { display: flex; gap: 5px; }
         .chat-input-row input {
-            flex: 1; padding: 5px 8px; border-radius: 6px; border: none; font-size: 13px;
+            flex: 1; padding: 5px 8px; border-radius: 6px; border: none; font-size: 12px;
         }
         .chat-input-row button {
-            background: #2ecc71; border: none; border-radius: 6px; padding: 0 12px; font-weight: bold; cursor: pointer;
+            background: #2ecc71; border: none; border-radius: 6px;
+            padding: 0 12px; font-weight: bold; cursor: pointer;
         }
 
-        /* Нижняя панель игрока и веер карт */
+        /* Нижняя зона с веером карт */
         .bottom-area {
-            width: 100%; display: flex; flex-direction: column; align-items: center;
-            padding: 4px 0 10px 0;
+            display: flex; flex-direction: column; align-items: center;
+            padding-bottom: 10px; width: 100%;
         }
         #unoBtn {
             background: linear-gradient(45deg, #ff1744, #ff9100); color: white;
-            border: 2px solid white; border-radius: 50px; padding: 7px 26px;
-            font-size: 15px; font-weight: 900; cursor: pointer; margin-bottom: 6px;
-            box-shadow: 0 3px 10px rgba(255, 23, 68, 0.5);
+            border: 3px solid white; border-radius: 50px; padding: 7px 26px;
+            font-size: 16px; font-weight: 900; cursor: pointer; margin-bottom: 8px;
+            box-shadow: 0 4px 12px rgba(255, 23, 68, 0.5);
         }
-        #unoBtn:disabled { background: #444; box-shadow: none; opacity: 0.35; cursor: not-allowed; }
-
-        .hand {
-            display: flex; justify-content: center; align-items: flex-end;
-            width: 100%; height: 122px; padding: 0 10px;
+        #unoBtn:disabled { background: #444; box-shadow: none; opacity: 0.4; cursor: not-allowed; }
+        .hand-container {
+            width: 100%; height: 126px; display: flex;
+            align-items: flex-end; justify-content: center; position: relative;
         }
-        .hand .uno-card { cursor: pointer; }
-        .hand .uno-card:hover { transform: translateY(-16px) !important; z-index: 50 !important; }
+        .hand-card-wrap {
+            position: absolute; bottom: 0; transition: transform 0.15s, left 0.15s;
+            cursor: pointer;
+        }
+        .hand-card-wrap:hover { transform: translateY(-16px) !important; z-index: 90 !important; }
 
-        /* Модальные окна */
+        /* Огромный всплывающий стикер по центру */
+        #tauntOverlay {
+            display: none; position: fixed; inset: 0; pointer-events: none;
+            align-items: center; justify-content: center; flex-direction: column;
+            z-index: 250; animation: popIn 0.3s ease;
+        }
+        .taunt-popup-box {
+            background: rgba(0,0,0,0.85); border: 4px solid #f1c40f;
+            border-radius: 24px; padding: 18px 30px; text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        }
+        .taunt-popup-emoji { font-size: 72px; line-height: 1.1; }
+        .taunt-popup-text { font-size: 24px; font-weight: 900; color: #f1c40f; margin-top: 6px; }
+        .taunt-popup-from { font-size: 14px; color: #ddd; margin-top: 4px; }
+        @keyframes popIn {
+            0% { transform: scale(0.3); opacity: 0; }
+            80% { transform: scale(1.08); opacity: 1; }
+            100% { transform: scale(1); }
+        }
+
+        /* Окно выбора цвета и таблица очков */
         .modal-overlay {
             display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.88);
-            align-items: center; justify-content: center; flex-direction: column; z-index: 150; padding: 20px;
+            align-items: center; justify-content: center; flex-direction: column;
+            z-index: 180; padding: 20px; text-align: center;
         }
         .color-options { display: flex; gap: 15px; margin-top: 20px; }
-        .color-btn { width: 62px; height: 62px; border-radius: 50%; border: 4px solid white; cursor: pointer; }
-        .scoreboard-box {
-            background: #1c2833; border: 2px solid #f1c40f; border-radius: 16px;
-            padding: 20px; width: 100%; max-width: 340px; text-align: center;
+        .color-btn {
+            width: 62px; height: 62px; border-radius: 50%;
+            border: 4px solid white; cursor: pointer;
+        }
+        .score-table {
+            background: rgba(255,255,255,0.1); border-radius: 12px;
+            padding: 15px; width: 100%; max-width: 340px; margin: 15px 0;
         }
         .score-row {
-            display: flex; justify-content: space-between; padding: 8px 10px;
-            border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 16px;
+            display: flex; justify-content: space-between; padding: 6px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.15); font-size: 16px;
         }
     </style>
 </head>
 <body>
 
-    <div id="reconnectBanner">🔄 Связь потеряна. Пытаемся переподключиться...</div>
-    <button id="soundToggle" onclick="toggleSound()" title="Звук">🔊</button>
+    <div id="reconnectBanner">Связь потеряна. Пытаемся переподключиться...</div>
+    <button id="soundToggle" onclick="toggleSound()">🔊</button>
 
     <div id="loginScreen">
         <div class="uno-logo-title">UNO</div>
-        <input type="text" id="nameInput" placeholder="Ваше имя" maxlength="14">
+        <input type="text" id="nameInput" placeholder="Ваше имя" maxlength="15">
         <button class="btn-main" onclick="join()">Войти за стол</button>
     </div>
 
     <div class="top-bar">
-        <div class="round-info" id="roundInfo">Ожидание игроков (2–8 чел.) • Игра до 250 очков</div>
         <div class="players-list" id="playersList"></div>
-        <div id="lobbyControls" style="margin-top: 12px; display: none;">
-            <button class="btn-main" onclick="startGame()">Начать матч!</button>
+        <div id="lobbyControls" style="margin-top: 10px; display: none;">
+            <button class="btn-main" onclick="startGame()">Начать игру!</button>
         </div>
     </div>
 
     <div class="center-area" id="gameTable" style="display: none;">
-        <div class="direction-indicator" id="dirText">По часовой ➡️</div>
+        <div class="direction-indicator" id="dirText">По часовой ➡️ (Цель: 250 очков)</div>
         <div class="table">
             <div class="uno-card deck-back" onclick="drawCard()">
-                <div class="card-inner">
-                    <div class="card-oval"><span class="deck-logo">UNO</span></div>
+                <div class="uno-card-inner">
+                    <div class="uno-oval"><span class="uno-oval-text">UNO</span></div>
                 </div>
             </div>
             <div id="topCard"></div>
         </div>
     </div>
 
-    <div id="stickerOverlay"></div>
-
-    <div class="chat-box">
+    <div class="social-panel">
         <div id="chatMessages"></div>
-        <div class="reactions-row">
-            <button class="sticker-btn" onclick="sendSticker('🤡', 'Клоун!')">🤡 Клоун</button>
-            <button class="sticker-btn" onclick="sendSticker('😭', 'Поплачь!')">😭 Поплачь</button>
-            <button class="sticker-btn" onclick="sendSticker('🐌', 'Нуб, ходи!')">🐌 Нуб</button>
-            <button class="sticker-btn" onclick="sendSticker('💀', 'Тебе конец!')">💀 RIP</button>
-            <button class="sticker-btn" onclick="sendSticker('😈', 'Лови +4!')">😈 Лови +4</button>
-            <button class="sticker-btn" onclick="sendSticker('🥱', 'Скукота...')">🥱 Скучно</button>
-            <button class="emoji-btn" onclick="sendChatEmoji('😂')">😂</button>
-            <button class="emoji-btn" onclick="sendChatEmoji('😡')">😡</button>
-            <button class="emoji-btn" onclick="sendChatEmoji('🔥')">🔥</button>
-            <button class="emoji-btn" onclick="sendChatEmoji('👍')">👍</button>
+        <div class="taunt-controls">
+            <select id="tauntTarget">
+                <option value="all">Кому: Всем</option>
+            </select>
+            <button class="taunt-btn" onclick="sendTaunt('🤡', 'Клоун!')">🤡 Клоун</button>
+            <button class="taunt-btn" onclick="sendTaunt('😭', 'Поплачь!')">😭 Поплачь</button>
+            <button class="taunt-btn" onclick="sendTaunt('🐌', 'Не тормози!')">🐌 Нуб</button>
+            <button class="taunt-btn" onclick="sendTaunt('🥱', 'Скучно...')">🥱 Скучно</button>
+            <button class="taunt-btn" onclick="sendTaunt('🔥', 'Красава!')">🔥 Огонь</button>
+        </div>
+        <div class="emoji-strip">
+            <button class="emoji-btn" onclick="sendChatText('😂')">😂</button>
+            <button class="emoji-btn" onclick="sendChatText('😡')">😡</button>
+            <button class="emoji-btn" onclick="sendChatText('😱')">😱</button>
+            <button class="emoji-btn" onclick="sendChatText('😭')">😭</button>
+            <button class="emoji-btn" onclick="sendChatText('😈')">😈</button>
+            <button class="emoji-btn" onclick="sendChatText('🤡')">🤡</button>
+            <button class="emoji-btn" onclick="sendChatText('🔥')">🔥</button>
+            <button class="emoji-btn" onclick="sendChatText('👍')">👍</button>
+            <button class="emoji-btn" onclick="sendChatText('🎉')">🎉</button>
+            <button class="emoji-btn" onclick="sendChatText('👀')">👀</button>
         </div>
         <div class="chat-input-row">
             <input type="text" id="chatInput" placeholder="Написать в чат..." onkeydown="if(event.key==='Enter') sendChat()">
-            <button onclick="sendChat()">></button>
+            <button onclick="sendChat()">➤</button>
         </div>
     </div>
 
     <div class="bottom-area">
         <button id="unoBtn" onclick="sayUno()" disabled style="display: none;">КРИКНУТЬ УНО!</button>
-        <div class="hand" id="hand"></div>
+        <div class="hand-container" id="hand"></div>
     </div>
 
-    <div id="colorPicker" class="modal-overlay">
+    <!-- Всплывающий стикер -->
+    <div id="tauntOverlay">
+        <div class="taunt-popup-box">
+            <div class="taunt-popup-emoji" id="tauntEmoji">🤡</div>
+            <div class="taunt-popup-text" id="tauntText">Клоун!</div>
+            <div class="taunt-popup-from" id="tauntFrom">от Игрока</div>
+        </div>
+    </div>
+
+    <!-- Выбор цвета -->
+    <div class="modal-overlay" id="colorPicker">
         <h2>Выберите цвет:</h2>
         <div class="color-options">
             <div class="color-btn bg-red" onclick="selectColor('red')"></div>
@@ -289,224 +330,175 @@
         </div>
     </div>
 
-    <div id="scoreModal" class="modal-overlay">
-        <div class="scoreboard-box">
-            <h2 id="modalTitle" style="color:#f1c40f; margin-top:0;">Раунд завершен!</h2>
-            <p id="modalSubtitle" style="font-size:14px;"></p>
-            <div id="standingsList" style="margin: 15px 0;"></div>
-            <div id="modalFooter" style="font-size:13px; color:#aaa;">Следующий раунд через 6 сек...</div>
-        </div>
+    <!-- Таблица раунда / матча -->
+    <div class="modal-overlay" id="scoreModal">
+        <h2 id="scoreTitle">Раунд окончен!</h2>
+        <div id="scoreSubtitle" style="color: #f1c40f; font-weight: bold;"></div>
+        <div class="score-table" id="scoreTableBody"></div>
+        <button class="btn-main" id="newMatchBtn" style="display: none;" onclick="location.reload()">Новая игра</button>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        const socket = io({
-            reconnection: true,
-            reconnectionDelay: 1000,
-            reconnectionAttempts: Infinity
-        });
+        const socket = io();
+        let isMyTurn = false;
+        let pendingWildIndex = null;
+        let soundEnabled = true;
+        let audioCtx = null;
+        let tauntTimeout = null;
 
-        // Уникальный ID игрока в памяти браузера для возврата при обрыве связи
-        let myPlayerId = sessionStorage.getItem('uno_player_id');
+        // Уникальный ID игрока для автовозврата при обрыве связи
+        let myPlayerId = localStorage.getItem('uno_player_id');
         if (!myPlayerId) {
-            myPlayerId = 'p_' + Math.random().toString(36).substr(2, 9) + Date.now();
-            sessionStorage.setItem('uno_player_id', myPlayerId);
+            myPlayerId = 'p_' + Math.random().toString(36).substr(2, 12);
+            localStorage.setItem('uno_player_id', myPlayerId);
         }
-        let savedName = sessionStorage.getItem('uno_player_name') || '';
+
+        const savedName = localStorage.getItem('uno_player_name');
         if (savedName) document.getElementById('nameInput').value = savedName;
 
-        let isMyTurn = false;
-        let wasMyTurn = false;
-        let pendingWildIndex = null;
-        let currentHand = [];
-        let soundEnabled = true;
+        // Загрузка пользовательских MP3-файлов
+        const customSounds = {
+            plus2: new Audio('/plus2.mp3'),
+            plus4: new Audio('/plus4.mp3'),
+            uno: new Audio('/uno.mp3'),
+            wild: new Audio('/wild.mp3')
+        };
 
-        // Авто-переподключение при восстановлении сети
-        socket.on('connect', () => {
-            document.getElementById('reconnectBanner').style.display = 'none';
-            const name = sessionStorage.getItem('uno_player_name');
-            if (name) {
-                socket.emit('joinGame', { name, playerId: myPlayerId });
-                document.getElementById('loginScreen').style.display = 'none';
+        function unlockAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             }
-        });
-
-        socket.on('disconnect', () => {
-            if (sessionStorage.getItem('uno_player_name')) {
-                document.getElementById('reconnectBanner').style.display = 'block';
-            }
-        });
-
-        // Синтезатор звуков через Web Audio API
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        let audioCtx = null;
-
-        function initAudio() {
-            if (!audioCtx) audioCtx = new AudioCtx();
             if (audioCtx.state === 'suspended') audioCtx.resume();
+            Object.values(customSounds).forEach(audio => {
+                audio.load();
+            });
         }
 
         function toggleSound() {
             soundEnabled = !soundEnabled;
             document.getElementById('soundToggle').innerText = soundEnabled ? '🔊' : '🔇';
-            if (soundEnabled) initAudio();
         }
 
-        function playTone(type) {
-            if (!soundEnabled) return;
-            initAudio();
-            const now = audioCtx.currentTime;
+        function playSynthTone(freq, type, duration, delay = 0) {
+            if (!soundEnabled || !audioCtx) return;
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime + delay);
+            gain.gain.setValueAtTime(0.15, audioCtx.currentTime + delay);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + duration);
             osc.connect(gain);
             gain.connect(audioCtx.destination);
+            osc.start(audioCtx.currentTime + delay);
+            osc.stop(audioCtx.currentTime + delay + duration);
+        }
 
-            if (type === 'card') {
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(320, now);
-                osc.frequency.exponentialRampToValueAtTime(110, now + 0.08);
-                gain.gain.setValueAtTime(0.25, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
-                osc.start(now); osc.stop(now + 0.09);
-            } else if (type === 'turn') {
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(523.25, now);
-                osc.frequency.setValueAtTime(659.25, now + 0.1);
-                gain.gain.setValueAtTime(0.2, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
-                osc.start(now); osc.stop(now + 0.26);
-            } else if (type === 'uno') {
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(440, now);
-                osc.frequency.setValueAtTime(554.37, now + 0.1);
-                osc.frequency.setValueAtTime(659.25, now + 0.2);
-                gain.gain.setValueAtTime(0.25, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
-                osc.start(now); osc.stop(now + 0.46);
-            } else if (type === 'penalty') {
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(220, now);
-                osc.frequency.linearRampToValueAtTime(120, now + 0.35);
-                gain.gain.setValueAtTime(0.3, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.36);
-                osc.start(now); osc.stop(now + 0.37);
-            } else if (type === 'sticker') {
-                osc.type = 'square';
-                osc.frequency.setValueAtTime(300, now);
-                osc.frequency.setValueAtTime(480, now + 0.08);
-                osc.frequency.setValueAtTime(260, now + 0.18);
-                gain.gain.setValueAtTime(0.18, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-                osc.start(now); osc.stop(now + 0.31);
-            } else if (type === 'win') {
-                osc.type = 'triangle';
-                [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
-                    osc.frequency.setValueAtTime(freq, now + i * 0.12);
+        function playEffect(type) {
+            if (!soundEnabled) return;
+            if (customSounds[type]) {
+                customSounds[type].currentTime = 0;
+                customSounds[type].play().catch(() => {
+                    // Запасной синтезированный звук, если MP3 еще не загружен на сервер
+                    if (type === 'plus4') { playSynthTone(130, 'sawtooth', 0.4); playSynthTone(95, 'sawtooth', 0.5, 0.15); }
+                    else if (type === 'plus2') { playSynthTone(320, 'square', 0.25); playSynthTone(240, 'square', 0.3, 0.12); }
+                    else if (type === 'uno') { playSynthTone(523, 'triangle', 0.2); playSynthTone(659, 'triangle', 0.2, 0.1); playSynthTone(784, 'triangle', 0.4, 0.2); }
+                    else if (type === 'wild') { playSynthTone(440, 'sine', 0.2); playSynthTone(554, 'sine', 0.2, 0.1); playSynthTone(659, 'sine', 0.3, 0.2); }
                 });
-                gain.gain.setValueAtTime(0.3, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
-                osc.start(now); osc.stop(now + 0.62);
+                return;
+            }
+            if (type === 'card') {
+                playSynthTone(260, 'triangle', 0.08);
+            } else if (type === 'turn') {
+                playSynthTone(587, 'sine', 0.12);
+                playSynthTone(880, 'sine', 0.18, 0.08);
+            } else if (type === 'start') {
+                playSynthTone(440, 'triangle', 0.15);
+                playSynthTone(554, 'triangle', 0.15, 0.12);
+                playSynthTone(659, 'triangle', 0.25, 0.24);
             }
         }
 
-        socket.on('playSound', (type) => playTone(type));
-
         function join() {
-            initAudio();
-            const inputVal = document.getElementById('nameInput').value.trim();
-            const finalName = inputVal || ('Игрок_' + Math.floor(Math.random() * 90 + 10));
-            sessionStorage.setItem('uno_player_name', finalName);
-            socket.emit('joinGame', { name: finalName, playerId: myPlayerId });
+            unlockAudio();
+            const name = document.getElementById('nameInput').value.trim();
+            if (name) localStorage.setItem('uno_player_name', name);
+            socket.emit('joinGame', { playerId: myPlayerId, playerName: name });
             document.getElementById('loginScreen').style.display = 'none';
         }
 
+        socket.on('connect', () => {
+            document.getElementById('reconnectBanner').style.display = 'none';
+            if (document.getElementById('loginScreen').style.display === 'none') {
+                const name = localStorage.getItem('uno_player_name') || '';
+                socket.emit('joinGame', { playerId: myPlayerId, playerName: name });
+            }
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('reconnectBanner').style.display = 'block';
+        });
+
         function startGame() {
-            initAudio();
+            unlockAudio();
             socket.emit('startGame');
         }
 
-        function createCardHTML(card) {
-            const isWild = card.type === 'wild' || card.type === 'wild4';
-            const ovalClass = isWild ? 'card-oval wild-oval' : 'card-oval';
-            const textClass = isWild ? '' : `txt-${card.color}`;
+        function buildCardHTML(card) {
+            const isWild = card.value === '🌈' || card.value === '+4';
+            const ovalClass = isWild ? 'uno-oval wild-oval' : 'uno-oval';
+            const txtClass = isWild ? '' : `txt-${card.color}`;
             return `
-                <div class="card-inner bg-${card.color}">
-                    <span class="corner-top">${card.value}</span>
-                    <div class="${ovalClass}">
-                        <span class="card-center-val ${textClass}">${card.value}</span>
+                <div class="uno-card">
+                    <div class="uno-card-inner bg-${card.color}">
+                        <span class="corner-val corner-tl">${card.value}</span>
+                        <div class="${ovalClass}">
+                            <span class="uno-oval-text ${txtClass}">${card.value}</span>
+                        </div>
+                        <span class="corner-val corner-br">${card.value}</span>
                     </div>
-                    <span class="corner-bottom">${card.value}</span>
                 </div>
             `;
         }
 
-        function renderHand() {
-            const handDiv = document.getElementById('hand');
-            handDiv.innerHTML = '';
-            const count = currentHand.length;
-            if (count === 0) return;
-
-            const screenWidth = window.innerWidth - 20;
-            const cardWidth = 78;
-            let overlap = 0;
-
-            if (count * cardWidth > screenWidth && count > 1) {
-                const visibleStep = (screenWidth - cardWidth) / (count - 1);
-                overlap = Math.max(visibleStep - cardWidth, -62);
-            }
-
-            currentHand.forEach((card, index) => {
-                const el = document.createElement('div');
-                el.className = 'uno-card';
-                el.innerHTML = createCardHTML(card);
-                if (index > 0 && overlap < 0) {
-                    el.style.marginLeft = `${overlap}px`;
-                }
-                el.style.zIndex = index + 1;
-                el.onclick = () => {
-                    initAudio();
-                    if (!isMyTurn) return;
-                    if (card.color === 'black') {
-                        pendingWildIndex = index;
-                        document.getElementById('colorPicker').style.display = 'flex';
-                    } else {
-                        socket.emit('playCard', { cardIndex: index });
-                    }
-                };
-                handDiv.appendChild(el);
-            });
-        }
-
-        window.addEventListener('resize', renderHand);
-
         socket.on('gameState', (state) => {
             document.getElementById('scoreModal').style.display = 'none';
+            const wasMyTurn = isMyTurn;
             isMyTurn = state.isMyTurn;
 
-            if (state.soundEvent) playTone(state.soundEvent);
             if (isMyTurn && !wasMyTurn && state.gameStarted) {
-                setTimeout(() => playTone('turn'), 120);
+                playEffect('turn');
             }
-            wasMyTurn = isMyTurn;
 
-            document.getElementById('roundInfo').innerText = state.gameStarted
-                ? `Раунд ${state.roundNumber} • Цель: ${state.targetScore} очков`
-                : `Лобби (${state.playersList.length}/8 чел.) • Игра до ${state.targetScore} очков`;
-
+            // Список игроков сверху и обновление выпадающего списка адресатов
             const pList = document.getElementById('playersList');
+            const targetSelect = document.getElementById('tauntTarget');
+            const prevTarget = targetSelect.value;
+
             pList.innerHTML = '';
+            targetSelect.innerHTML = '<option value="all">Кому: Всем</option>';
+
             state.playersList.forEach(p => {
                 const div = document.createElement('div');
                 div.className = 'player-badge' +
                     (p.isTurn ? ' active-turn' : '') +
-                    (!p.connected ? ' offline' : '');
-                div.innerHTML = `
-                    <b>${p.name}${p.isMe ? ' (Вы)' : ''}${!p.connected ? ' 🔌' : ''}</b><br>
-                    🃏 ${p.count} | 🏆 ${p.score}
-                    ${p.saidUno ? '<br><span class="uno-tag">УНО!</span>' : ''}
-                `;
+                    (p.disconnected ? ' disconnected' : '');
+                div.innerHTML = `<b>${p.name}${p.isMe ? ' (Вы)' : ''}${p.disconnected ? ' 🔌' : ''}</b><br>` +
+                                `Карт: ${p.count} | Очки: ${p.score} ` +
+                                (p.saidUno ? '<br><span class="uno-tag">УНО!</span>' : '');
                 pList.appendChild(div);
+
+                if (!p.isMe) {
+                    const opt = document.createElement('option');
+                    opt.value = p.id;
+                    opt.innerText = `Для: ${p.name}`;
+                    targetSelect.appendChild(opt);
+                }
             });
+
+            if ([...targetSelect.options].some(o => o.value === prevTarget)) {
+                targetSelect.value = prevTarget;
+            }
 
             if (!state.gameStarted) {
                 document.getElementById('lobbyControls').style.display = state.playersList.length >= 2 ? 'block' : 'none';
@@ -520,20 +512,48 @@
             document.getElementById('gameTable').style.display = 'flex';
             document.getElementById('unoBtn').style.display = 'block';
 
-            document.getElementById('dirText').innerText = state.direction === 1
-                ? 'По часовой ➡️'
-                : 'Против часовой ⬅️';
+            document.getElementById('dirText').innerText = (state.direction === 1 ? 'По часовой ➡️' : 'Против часовой ⬅️') +
+                ` | До ${state.targetScore} очков`;
 
             const unoBtn = document.getElementById('unoBtn');
             unoBtn.disabled = !(state.hand.length <= 2 && !state.saidUno);
             unoBtn.innerText = state.saidUno ? 'УНО СКАЗАНО!' : 'КРИКНУТЬ УНО!';
 
-            const topCardDiv = document.getElementById('topCard');
-            topCardDiv.className = 'uno-card';
-            topCardDiv.innerHTML = createCardHTML(state.currentCard);
+            document.getElementById('topCard').innerHTML = buildCardHTML(state.currentCard);
 
-            currentHand = state.hand;
-            renderHand();
+            // Адаптивный веер карт в руке под ширину любого экрана
+            const handDiv = document.getElementById('hand');
+            handDiv.innerHTML = '';
+            const count = state.hand.length;
+            if (count > 0) {
+                const screenW = window.innerWidth - 20;
+                const cardW = 82;
+                let step = 46;
+                if (cardW + (count - 1) * step > screenW) {
+                    step = Math.max(16, (screenW - cardW) / Math.max(1, count - 1));
+                }
+                const totalW = cardW + (count - 1) * step;
+                const startX = (window.innerWidth - totalW) / 2;
+
+                state.hand.forEach((card, index) => {
+                    const wrap = document.createElement('div');
+                    wrap.className = 'hand-card-wrap';
+                    wrap.style.left = `${startX + index * step}px`;
+                    wrap.style.zIndex = index + 1;
+                    wrap.innerHTML = buildCardHTML(card);
+                    wrap.onclick = () => {
+                        unlockAudio();
+                        if (!isMyTurn) return;
+                        if (card.color === 'black') {
+                            pendingWildIndex = index;
+                            document.getElementById('colorPicker').style.display = 'flex';
+                        } else {
+                            socket.emit('playCard', { cardIndex: index });
+                        }
+                    };
+                    handDiv.appendChild(wrap);
+                });
+            }
         });
 
         function selectColor(color) {
@@ -544,8 +564,15 @@
             }
         }
 
-        function drawCard() { initAudio(); if (isMyTurn) socket.emit('drawCard'); }
-        function sayUno() { initAudio(); socket.emit('sayUno'); }
+        function drawCard() {
+            unlockAudio();
+            if (isMyTurn) socket.emit('drawCard');
+        }
+
+        function sayUno() {
+            unlockAudio();
+            socket.emit('sayUno');
+        }
 
         function sendChat() {
             const input = document.getElementById('chatInput');
@@ -554,22 +581,31 @@
                 input.value = '';
             }
         }
-        function sendChatEmoji(emoji) { socket.emit('sendChat', emoji); }
-        function sendSticker(emoji, title) {
-            initAudio();
-            socket.emit('sendSticker', { emoji, title });
+
+        function sendChatText(txt) {
+            socket.emit('sendChat', txt);
         }
 
-        socket.on('showSticker', ({ sender, sticker }) => {
-            playTone('sticker');
-            const overlay = document.getElementById('stickerOverlay');
-            overlay.innerHTML = `
-                <div class="sticker-popup">
-                    <div class="sticker-emoji">${sticker.emoji}</div>
-                    <div class="sticker-title">${sticker.title}</div>
-                    <div class="sticker-sender">от ${sender}</div>
-                </div>
-            `;
+        function sendTaunt(emoji, text) {
+            const targetId = document.getElementById('tauntTarget').value;
+            socket.emit('sendTaunt', { targetId, emoji, text });
+        }
+
+        socket.on('playSound', (type) => playEffect(type));
+
+        socket.on('tauntSticker', ({ sender, emoji, text, isPrivate }) => {
+            const overlay = document.getElementById('tauntOverlay');
+            document.getElementById('tauntEmoji').innerText = emoji;
+            document.getElementById('tauntText').innerText = text;
+            document.getElementById('tauntFrom').innerText = isPrivate
+                ? `Лично вам от ${sender}`
+                : `Всем от ${sender}`;
+
+            overlay.style.display = 'flex';
+            clearTimeout(tauntTimeout);
+            tauntTimeout = setTimeout(() => {
+                overlay.style.display = 'none';
+            }, 2400);
         });
 
         socket.on('chatMessage', (msg) => {
@@ -582,34 +618,37 @@
             box.scrollTop = box.scrollHeight;
         });
 
-        socket.on('roundOver', (data) => {
-            playTone('win');
-            document.getElementById('modalTitle').innerText = `Раунд выиграл ${data.winner}!`;
-            document.getElementById('modalSubtitle').innerText = `+${data.roundPoints} очков за карты соперников`;
-            document.getElementById('standingsList').innerHTML = data.standings
-                .map((p, i) => `<div class="score-row"><span>${i + 1}. ${p.name}</span><b>${p.score} / 250</b></div>`)
-                .join('');
-            document.getElementById('modalFooter').innerText = `Раунд ${data.nextRound} начнется через 6 секунд...`;
+        function renderScoreboard(scoreboard) {
+            const body = document.getElementById('scoreTableBody');
+            body.innerHTML = '';
+            scoreboard.forEach((row, i) => {
+                const div = document.createElement('div');
+                div.className = 'score-row';
+                div.innerHTML = `<span>${i + 1}. ${row.name}</span><b>${row.score} очк.</b>`;
+                body.appendChild(div);
+            });
+        }
+
+        socket.on('roundOver', ({ winner, roundPoints, scoreboard }) => {
+            playEffect('start');
+            document.getElementById('scoreTitle').innerText = `Раунд выиграл ${winner}!`;
+            document.getElementById('scoreSubtitle').innerText = `+${roundPoints} очков! Следующий раунд через 4 сек...`;
+            document.getElementById('newMatchBtn').style.display = 'none';
+            renderScoreboard(scoreboard);
             document.getElementById('scoreModal').style.display = 'flex';
         });
 
-        socket.on('matchOver', (data) => {
-            playTone('win');
-            document.getElementById('modalTitle').innerText = `🏆 ЧЕМПИОН: ${data.winner}!`;
-            document.getElementById('modalSubtitle').innerText = `Набрано 250+ очков (+${data.roundPoints} в финале)`;
-            document.getElementById('standingsList').innerHTML = data.standings
-                .map((p, i) => `<div class="score-row"><span>${i + 1}. ${p.name}</span><b>${p.score}</b></div>`)
-                .join('');
-            document.getElementById('modalFooter').innerHTML = `<button class="btn-main" style="margin-top:10px;" onclick="location.reload()">Новая игра</button>`;
+        socket.on('matchOver', ({ winner, roundPoints, scoreboard }) => {
+            playEffect('uno');
+            document.getElementById('scoreTitle').innerText = `🏆 ПОБЕДИТЕЛЬ МАТЧА: ${winner}!`;
+            document.getElementById('scoreSubtitle').innerText = `Набрано 250+ очков (+${roundPoints} в финале)`;
+            document.getElementById('newMatchBtn').style.display = 'inline-block';
+            renderScoreboard(scoreboard);
             document.getElementById('scoreModal').style.display = 'flex';
         });
 
         socket.on('alertMsg', (msg) => alert(msg));
-        socket.on('errorMsg', (msg) => {
-            sessionStorage.removeItem('uno_player_name');
-            alert(msg);
-            location.reload();
-        });
+        socket.on('errorMsg', (msg) => { alert(msg); location.reload(); });
     </script>
 </body>
 </html>
