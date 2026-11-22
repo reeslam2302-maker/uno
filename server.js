@@ -1,7 +1,6 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
@@ -10,12 +9,11 @@ const io = new Server(server, {
     pingInterval: 25000
 });
 
-// Раздаем index.html и аудиофайлы (plus2.mp3, plus4.mp3, uno.mp3, wild.mp3)
 app.use(express.static(__dirname));
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.get('/', (req, res) => res.sendFile(__dirname + '/index.html'));
 
 const colors = ['red', 'blue', 'green', 'yellow'];
-const botNames = ['Терминатор 🤖', 'Альтрон 🤖', 'Валли 🤖', 'R2-D2 🤖', 'Бендер 🤖', 'Джарвис 🤖', 'Скайнет 🤖'];
+const botNames = ['Терминатор 🤖', 'Альтрон 🤖', 'Валли 🤖', 'R2-D2 🤖', 'Бендер 🤖', 'ГЛаДОС 🤖', 'Джарвис 🤖'];
 
 let deck = [];
 let players = [];
@@ -23,7 +21,19 @@ let currentCard = null;
 let turnIndex = 0;
 let direction = 1;
 let gameStarted = false;
-let botTimer = null;
+let roundNumber = 1;
+
+let roomSettings = {
+    intercept: false,
+    stacking: false,
+    timer: false,
+    catchUno: false
+};
+
+let pendingPenalty = 0;
+let turnTimeLeft = 15;
+let turnInterval = null;
+let botTimeout = null;
 
 function createDeck() {
     deck = [];
@@ -43,10 +53,7 @@ function createDeck() {
         deck.push({ color: 'black', value: '🌈', type: 'wild' });
         deck.push({ color: 'black', value: '+4', type: 'wild4' });
     }
-    for (let i = deck.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [deck[i], deck[j]] = [deck[j], deck[i]];
-    }
+    deck.sort(() => Math.random() - 0.5);
 }
 
 function drawFromDeck(count) {
@@ -67,140 +74,192 @@ function getNextIndex(steps = 1) {
 function calculateHandPoints(hand) {
     return hand.reduce((sum, card) => {
         if (card.type === 'number') return sum + parseInt(card.value, 10);
-        if (card.type === 'wild' || card.type === 'wild4') return sum + 50;
+        if (card.color === 'black') return sum + 50;
         return sum + 20;
     }, 0);
 }
 
-function broadcastState(soundEvent = null) {
+function startTurnTimer() {
+    clearInterval(turnInterval);
+    if (!gameStarted || !roomSettings.timer) return;
+
+    turnTimeLeft = 15;
+    turnInterval = setInterval(() => {
+        if (!gameStarted) {
+            clearInterval(turnInterval);
+            return;
+        }
+        turnTimeLeft--;
+        io.emit('timerTick', turnTimeLeft);
+
+        if (turnTimeLeft <= 0) {
+            clearInterval(turnInterval);
+            handleTimeoutDraw();
+        }
+    }, 1000);
+}
+
+function handleTimeoutDraw() {
+    const currentPlayer = players[turnIndex];
+    if (!currentPlayer) return;
+
+    const drawCount = pendingPenalty > 0 ? pendingPenalty : 1;
+    currentPlayer.hand.push(...drawFromDeck(drawCount));
+    currentPlayer.saidUno = false;
+    pendingPenalty = 0;
+
+    io.emit('chatMessage', {
+        sender: 'Система',
+        text: `⏱️ Время вышло! ${currentPlayer.name} берет ${drawCount} карт(ы).`,
+        isSystem: true
+    });
+
+    turnIndex = getNextIndex(1);
+    broadcastState();
+    scheduleBotOrAutopilot();
+}
+
+function broadcastState() {
     players.forEach((player, index) => {
         if (player.isBot || !player.socketId) return;
-        const list = players.map((p, idx) => ({
+
+        const playersList = players.map((p, idx) => ({
             uid: p.uid,
             name: p.name,
             count: p.hand.length,
             score: p.score,
             saidUno: p.saidUno,
             isBot: p.isBot,
-            disconnected: p.disconnected,
-            isTurn: gameStarted && idx === turnIndex,
-            isMe: idx === index
+            autopilot: p.autopilot,
+            isTurn: idx === turnIndex,
+            isMe: idx === index,
+            canBeCaught: gameStarted && roomSettings.catchUno && p.hand.length === 1 && !p.saidUno && idx !== index
         }));
 
         io.to(player.socketId).emit('gameState', {
             gameStarted,
+            roundNumber,
+            settings: roomSettings,
+            pendingPenalty,
+            turnTimeLeft,
             hand: player.hand,
-            playersList: list,
+            playersList,
             saidUno: player.saidUno,
             currentCard,
             direction,
-            isMyTurn: gameStarted && index === turnIndex,
-            soundEvent
+            isMyTurn: gameStarted && index === turnIndex
         });
     });
 }
 
-function scheduleBotTurn() {
-    if (botTimer) clearTimeout(botTimer);
+function scheduleBotOrAutopilot() {
+    clearTimeout(botTimeout);
     if (!gameStarted || players.length === 0) return;
 
-    const currentPlayer = players[turnIndex];
-    if (!currentPlayer || !currentPlayer.isBot) return;
+    startTurnTimer();
 
-    botTimer = setTimeout(() => {
-        if (!gameStarted || !players[turnIndex] || !players[turnIndex].isBot) return;
-        executeBotMove(turnIndex);
-    }, 1300);
+    const current = players[turnIndex];
+    if (!current) return;
+
+    if (current.isBot || current.autopilot) {
+        botTimeout = setTimeout(() => {
+            if (!gameStarted || players[turnIndex]?.uid !== current.uid) return;
+            executeBotMove(turnIndex);
+        }, current.isBot ? 1500 : 2800);
+    }
 }
 
-function executeBotMove(botIdx) {
-    const bot = players[botIdx];
-    const validIndices = [];
-    bot.hand.forEach((c, idx) => {
-        if (c.color === 'black' || c.color === currentCard.color || c.value === currentCard.value) {
-            validIndices.push(idx);
-        }
-    });
+function executeBotMove(pIndex) {
+    const bot = players[pIndex];
+    if (!bot) return;
 
-    if (validIndices.length > 0) {
-        // Бот старается сначала ходить цветными картами, а черные оставлять напоследок
-        validIndices.sort((a, b) => (bot.hand[a].color === 'black' ? 1 : -1));
-        const chosenIndex = validIndices[0];
-        const card = bot.hand[chosenIndex];
+    let validIndex = -1;
+    for (let i = 0; i < bot.hand.length; i++) {
+        const c = bot.hand[i];
+        if (pendingPenalty > 0 && roomSettings.stacking) {
+            if (c.type === 'draw2' || c.type === 'wild4') {
+                validIndex = i;
+                break;
+            }
+        } else {
+            if (c.color === 'black' || c.color === currentCard.color || c.value === currentCard.value) {
+                validIndex = i;
+                break;
+            }
+        }
+    }
+
+    if (validIndex !== -1) {
+        if (bot.hand.length === 2) {
+            bot.saidUno = true;
+            io.emit('playSound', 'uno');
+            io.emit('chatMessage', { sender: 'Система', text: `🔥 ${bot.name} кричит УНО!`, isSystem: true });
+        }
 
         let chosenColor = 'red';
-        if (card.color === 'black') {
+        if (bot.hand[validIndex].color === 'black') {
             const counts = { red: 0, blue: 0, green: 0, yellow: 0 };
             bot.hand.forEach(c => { if (counts[c.color] !== undefined) counts[c.color]++; });
             chosenColor = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
         }
 
-        if (bot.hand.length === 2) {
-            bot.saidUno = true;
-            io.emit('chatMessage', { sender: 'Система', text: `🔥 ${bot.name} кричит УНО!`, isSystem: true });
-        }
-
-        processPlayCard(botIdx, chosenIndex, chosenColor);
+        processCardPlay(pIndex, validIndex, chosenColor, false);
     } else {
-        bot.hand.push(...drawFromDeck(1));
+        const drawCount = pendingPenalty > 0 ? pendingPenalty : 1;
+        bot.hand.push(...drawFromDeck(drawCount));
         bot.saidUno = false;
+        pendingPenalty = 0;
+        io.emit('playSound', 'card');
         turnIndex = getNextIndex(1);
-        broadcastState('draw');
-        scheduleBotTurn();
+        broadcastState();
+        scheduleBotOrAutopilot();
     }
 }
 
-function processPlayCard(pIndex, cardIndex, chosenColor) {
+function processCardPlay(pIndex, cardIndex, chosenColor, isIntercept) {
     const player = players[pIndex];
     const card = player.hand[cardIndex];
     if (!card) return;
 
+    if (isIntercept) {
+        turnIndex = pIndex;
+        io.emit('chatMessage', {
+            sender: 'Система',
+            text: `⚡ ${player.name} перехватил ход вне очереди!`,
+            isSystem: true
+        });
+    }
+
     player.hand.splice(cardIndex, 1);
     currentCard = { ...card };
 
-    let soundToPlay = 'play';
-
     if (card.color === 'black' && colors.includes(chosenColor)) {
         currentCard.color = chosenColor;
-        if (card.type === 'wild') soundToPlay = 'wild';
+    }
+
+    if (card.type === 'draw2') {
+        io.emit('playSound', 'plus2');
+    } else if (card.type === 'wild4') {
+        io.emit('playSound', 'plus4');
+    } else if (card.type === 'wild') {
+        io.emit('playSound', 'wild');
+    } else {
+        io.emit('playSound', 'card');
     }
 
     if (player.hand.length === 0) {
-        if (!player.saidUno && !player.isBot) {
+        if (!roomSettings.catchUno && !player.saidUno) {
             player.hand.push(...drawFromDeck(2));
             if (player.socketId) {
                 io.to(player.socketId).emit('alertMsg', 'Вы забыли нажать УНО! Штраф +2 карты.');
             }
         } else {
-            // Подсчет очков за раунд
-            let roundPoints = 0;
-            players.forEach((p, idx) => {
-                if (idx !== pIndex) roundPoints += calculateHandPoints(p.hand);
-            });
-            player.score += roundPoints;
-
-            if (player.score >= 250) {
-                io.emit('matchOver', {
-                    winner: player.name,
-                    scores: players.map(p => ({ name: p.name, score: p.score }))
-                });
-                resetFullMatch();
-                return;
-            } else {
-                io.emit('roundOver', {
-                    winner: player.name,
-                    points: roundPoints,
-                    scores: players.map(p => ({ name: p.name, score: p.score }))
-                });
-                setTimeout(() => startNewRound(), 4500);
-                return;
-            }
+            finishRound(pIndex);
+            return;
         }
     }
 
     if (player.hand.length > 1) player.saidUno = false;
-
-    const nextVictim = players[getNextIndex(1)];
 
     if (card.type === 'reverse') {
         if (players.length === 2) {
@@ -212,44 +271,107 @@ function processPlayCard(pIndex, cardIndex, chosenColor) {
     } else if (card.type === 'skip') {
         turnIndex = getNextIndex(2);
     } else if (card.type === 'draw2') {
-        soundToPlay = 'plus2';
-        nextVictim.hand.push(...drawFromDeck(2));
-        nextVictim.saidUno = false;
-        sendAutoTaunt(player, nextVictim, '😈 Лови +2!');
-        turnIndex = getNextIndex(2);
+        const victimIndex = getNextIndex(1);
+        const victim = players[victimIndex];
+
+        if (roomSettings.stacking) {
+            pendingPenalty += 2;
+            turnIndex = victimIndex;
+            sendAutoSticker(player, victim, '😈', `Накоплено +${pendingPenalty}!`);
+        } else {
+            victim.hand.push(...drawFromDeck(2));
+            victim.saidUno = false;
+            sendAutoSticker(player, victim, '😈', 'Лови +2!');
+            turnIndex = getNextIndex(2);
+        }
     } else if (card.type === 'wild4') {
-        soundToPlay = 'plus4';
-        nextVictim.hand.push(...drawFromDeck(4));
-        nextVictim.saidUno = false;
-        sendAutoTaunt(player, nextVictim, '💀 Лови +4!');
-        turnIndex = getNextIndex(2);
+        const victimIndex = getNextIndex(1);
+        const victim = players[victimIndex];
+
+        if (roomSettings.stacking) {
+            pendingPenalty += 4;
+            turnIndex = victimIndex;
+            sendAutoSticker(player, victim, '💀', `Накоплено +${pendingPenalty}!`);
+        } else {
+            victim.hand.push(...drawFromDeck(4));
+            victim.saidUno = false;
+            sendAutoSticker(player, victim, '💀', 'Лови +4!');
+            turnIndex = getNextIndex(2);
+        }
     } else {
         turnIndex = getNextIndex(1);
     }
 
-    broadcastState(soundToPlay);
-    scheduleBotTurn();
+    broadcastState();
+    scheduleBotOrAutopilot();
 }
 
-function sendAutoTaunt(sender, victim, text) {
-    if (victim.socketId) {
-        io.to(victim.socketId).emit('tauntPopup', { from: sender.name, text, isPrivate: true });
+function sendAutoSticker(fromPlayer, toPlayer, emoji, label) {
+    if (toPlayer.socketId) {
+        io.to(toPlayer.socketId).emit('showSticker', {
+            sender: fromPlayer.name,
+            emoji,
+            text: label,
+            isPrivate: true
+        });
     }
-    if (sender.socketId) {
-        io.to(sender.socketId).emit('chatMessage', {
+    if (fromPlayer.socketId) {
+        io.to(fromPlayer.socketId).emit('chatMessage', {
             sender: 'Система',
-            text: `Вы подкинули карту игроку ${victim.name}`,
+            text: `Вы отправили ${emoji} (${label}) игроку ${toPlayer.name}`,
             isSystem: true
         });
     }
 }
 
+function finishRound(winnerIndex) {
+    clearInterval(turnInterval);
+    clearTimeout(botTimeout);
+
+    const winner = players[winnerIndex];
+    let earnedPoints = 0;
+
+    players.forEach((p, idx) => {
+        if (idx !== winnerIndex) {
+            earnedPoints += calculateHandPoints(p.hand);
+        }
+    });
+
+    winner.score += earnedPoints;
+    io.emit('playSound', 'win');
+
+    const scoreboard = players
+        .map(p => ({ name: p.name, score: p.score }))
+        .sort((a, b) => b.score - a.score);
+
+    if (winner.score >= 250) {
+        io.emit('matchOver', {
+            winnerName: winner.name,
+            earnedPoints,
+            scoreboard
+        });
+        resetAll();
+    } else {
+        io.emit('roundOver', {
+            winnerName: winner.name,
+            earnedPoints,
+            roundNumber,
+            scoreboard
+        });
+
+        setTimeout(() => {
+            if (players.length < 2) return;
+            roundNumber++;
+            startNewRound();
+        }, 5000);
+    }
+}
+
 function startNewRound() {
-    if (players.length < 2) return;
-    gameStarted = true;
-    direction = 1;
-    turnIndex = 0;
     createDeck();
+    direction = 1;
+    pendingPenalty = 0;
+    turnIndex = (roundNumber - 1) % players.length;
 
     players.forEach(p => {
         p.hand = drawFromDeck(7);
@@ -260,31 +382,48 @@ function startNewRound() {
         currentCard = deck.pop();
     } while (currentCard.color === 'black');
 
-    broadcastState('play');
-    scheduleBotTurn();
+    broadcastState();
+    scheduleBotOrAutopilot();
 }
 
-function resetFullMatch() {
-    if (botTimer) clearTimeout(botTimer);
+function resetAll() {
+    clearInterval(turnInterval);
+    clearTimeout(botTimeout);
     players = [];
     gameStarted = false;
     currentCard = null;
+    roundNumber = 1;
+    pendingPenalty = 0;
 }
 
 io.on('connection', (socket) => {
-    socket.on('joinOnline', ({ uid, name }) => {
-        // Проверка переподключения
+    socket.on('checkReconnect', (uid) => {
         const existing = players.find(p => p.uid === uid && !p.isBot);
+        socket.emit('reconnectAvailable', {
+            available: Boolean(existing && gameStarted),
+            name: existing ? existing.name : ''
+        });
+    });
+
+    socket.on('joinGame', ({ uid, name }) => {
+        const existing = players.find(p => p.uid === uid && !p.isBot);
+
         if (existing) {
-            if (existing.disconnectTimer) clearTimeout(existing.disconnectTimer);
             existing.socketId = socket.id;
-            existing.disconnected = false;
+            existing.autopilot = false;
+            if (name && name.trim()) existing.name = name.trim().slice(0, 15);
+
+            io.emit('chatMessage', {
+                sender: 'Система',
+                text: `🔄 ${existing.name} вернулся за стол и отключил автопилот!`,
+                isSystem: true
+            });
             broadcastState();
             return;
         }
 
         if (gameStarted || players.length >= 8) {
-            socket.emit('errorMsg', 'Онлайн-матч уже идет или стол заполнен (макс. 8 игроков).');
+            socket.emit('errorMsg', 'Матч уже идет или за столом максимум 8 игроков.');
             return;
         }
 
@@ -297,24 +436,31 @@ io.on('connection', (socket) => {
             score: 0,
             saidUno: false,
             isBot: false,
-            disconnected: false
+            autopilot: false
         });
+
+        broadcastState();
+    });
+
+    socket.on('updateSettings', (newSettings) => {
+        if (gameStarted) return;
+        roomSettings = { ...roomSettings, ...newSettings };
         broadcastState();
     });
 
     socket.on('addBot', () => {
         if (gameStarted || players.length >= 8) return;
         const usedNames = players.map(p => p.name);
-        const freeName = botNames.find(n => !usedNames.includes(n)) || `Бот ${players.length + 1} 🤖`;
+        const botName = botNames.find(n => !usedNames.includes(n)) || `Бот ${players.length + 1} 🤖`;
         players.push({
             uid: 'bot_' + Math.random().toString(36).slice(2),
             socketId: null,
-            name: freeName,
+            name: botName,
             hand: [],
             score: 0,
             saidUno: false,
             isBot: true,
-            disconnected: false
+            autopilot: false
         });
         broadcastState();
     });
@@ -327,6 +473,9 @@ io.on('connection', (socket) => {
 
     socket.on('startGame', () => {
         if (gameStarted || players.length < 2) return;
+        gameStarted = true;
+        roundNumber = 1;
+        players.forEach(p => p.score = 0);
         startNewRound();
     });
 
@@ -334,25 +483,63 @@ io.on('connection', (socket) => {
         const p = players.find(p => p.socketId === socket.id);
         if (p && p.hand.length <= 2 && !p.saidUno) {
             p.saidUno = true;
+            io.emit('playSound', 'uno');
             io.emit('chatMessage', { sender: 'Система', text: `🔥 ${p.name} кричит УНО!`, isSystem: true });
-            broadcastState('uno');
+            broadcastState();
+        }
+    });
+
+    socket.on('catchUno', (targetUid) => {
+        if (!gameStarted || !roomSettings.catchUno) return;
+        const catcher = players.find(p => p.socketId === socket.id);
+        const target = players.find(p => p.uid === targetUid);
+
+        if (catcher && target && target.hand.length === 1 && !target.saidUno && catcher.uid !== target.uid) {
+            target.hand.push(...drawFromDeck(2));
+            io.emit('playSound', 'plus2');
+            io.emit('chatMessage', {
+                sender: 'Система',
+                text: `👀 ${catcher.name} поймал ${target.name} на забытом УНО! Штраф +2 карты!`,
+                isSystem: true
+            });
+            broadcastState();
         }
     });
 
     socket.on('playCard', ({ cardIndex, chosenColor }) => {
         if (!gameStarted) return;
         const pIndex = players.findIndex(p => p.socketId === socket.id);
-        if (pIndex !== turnIndex) return;
+        if (pIndex === -1) return;
 
-        const card = players[pIndex].hand[cardIndex];
+        const player = players[pIndex];
+        const card = player.hand[cardIndex];
         if (!card) return;
+
+        const isMyTurn = (pIndex === turnIndex);
+
+        if (!isMyTurn) {
+            if (roomSettings.intercept && pendingPenalty === 0 &&
+                card.color !== 'black' &&
+                card.color === currentCard.color &&
+                card.value === currentCard.value) {
+                processCardPlay(pIndex, cardIndex, chosenColor, true);
+            }
+            return;
+        }
+
+        if (pendingPenalty > 0 && roomSettings.stacking) {
+            if (card.type !== 'draw2' && card.type !== 'wild4') return;
+            processCardPlay(pIndex, cardIndex, chosenColor, false);
+            return;
+        }
 
         const isValid = card.color === 'black' ||
                         card.color === currentCard.color ||
                         card.value === currentCard.value;
-        if (!isValid) return;
 
-        processPlayCard(pIndex, cardIndex, chosenColor);
+        if (isValid) {
+            processCardPlay(pIndex, cardIndex, chosenColor, false);
+        }
     });
 
     socket.on('drawCard', () => {
@@ -360,11 +547,15 @@ io.on('connection', (socket) => {
         const pIndex = players.findIndex(p => p.socketId === socket.id);
         if (pIndex !== turnIndex) return;
 
-        players[pIndex].hand.push(...drawFromDeck(1));
+        const drawCount = pendingPenalty > 0 ? pendingPenalty : 1;
+        players[pIndex].hand.push(...drawFromDeck(drawCount));
         players[pIndex].saidUno = false;
+        pendingPenalty = 0;
+
+        io.emit('playSound', 'card');
         turnIndex = getNextIndex(1);
-        broadcastState('draw');
-        scheduleBotTurn();
+        broadcastState();
+        scheduleBotOrAutopilot();
     });
 
     socket.on('sendChat', (text) => {
@@ -374,19 +565,19 @@ io.on('connection', (socket) => {
         if (clean) io.emit('chatMessage', { sender: p.name, text: clean, isSystem: false });
     });
 
-    socket.on('sendTaunt', ({ targetUid, text }) => {
+    socket.on('sendSticker', ({ targetUid, emoji, text }) => {
         const sender = players.find(p => p.socketId === socket.id);
-        if (!sender || !text) return;
+        if (!sender) return;
 
         if (targetUid === 'all') {
-            io.emit('tauntPopup', { from: sender.name, text, isPrivate: false });
+            io.emit('showSticker', { sender: sender.name, emoji, text, isPrivate: false });
         } else {
             const target = players.find(p => p.uid === targetUid);
             if (target && target.socketId) {
-                io.to(target.socketId).emit('tauntPopup', { from: sender.name, text, isPrivate: true });
+                io.to(target.socketId).emit('showSticker', { sender: sender.name, emoji, text, isPrivate: true });
                 socket.emit('chatMessage', {
                     sender: 'Система',
-                    text: `Стикер «${text}» отправлен лично игроку ${target.name}`,
+                    text: `Вы отправили стикер ${emoji} лично для ${target.name}`,
                     isSystem: true
                 });
             }
@@ -394,33 +585,23 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        const pIndex = players.findIndex(p => p.socketId === socket.id);
-        if (pIndex === -1) return;
+        const idx = players.findIndex(p => p.socketId === socket.id);
+        if (idx === -1) return;
 
-        const player = players[pIndex];
-        if (!gameStarted) {
-            players.splice(pIndex, 1);
-            if (players.every(p => p.isBot)) players = [];
+        const player = players[idx];
+        if (gameStarted) {
+            player.socketId = null;
+            player.autopilot = true;
+            io.emit('chatMessage', {
+                sender: 'Система',
+                text: `🤖 ${player.name} потерял связь. Включен автопилот (игрок может вернуться).`,
+                isSystem: true
+            });
             broadcastState();
+            if (idx === turnIndex) scheduleBotOrAutopilot();
         } else {
-            player.disconnected = true;
+            players.splice(idx, 1);
             broadcastState();
-            player.disconnectTimer = setTimeout(() => {
-                const idx = players.findIndex(p => p.uid === player.uid);
-                if (idx !== -1 && players[idx].disconnected) {
-                    const leftName = players[idx].name;
-                    players.splice(idx, 1);
-                    const realHumans = players.filter(p => !p.isBot);
-                    if (realHumans.length === 0 || players.length < 2) {
-                        io.emit('errorMsg', `Игрок ${leftName} не вернулся. Матч завершен.`);
-                        resetFullMatch();
-                    } else {
-                        if (turnIndex >= players.length) turnIndex = 0;
-                        broadcastState();
-                        scheduleBotTurn();
-                    }
-                }
-            }, 45000);
         }
     });
 });
