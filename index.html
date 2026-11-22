@@ -3,95 +3,106 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Онлайн UNO (до 8 игроков)</title>
+    <title>UNO Online & Offline</title>
     <style>
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: radial-gradient(circle at center, #1b5e20 0%, #0a290d 100%);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: radial-gradient(circle at center, #1b5e20 0%, #09220b 100%);
             color: white; margin: 0; height: 100dvh;
             display: flex; flex-direction: column; justify-content: space-between;
             user-select: none; overflow: hidden;
         }
 
-        /* Баннер переподключения */
+        /* Баннер потери связи */
         #reconnectBanner {
             display: none; position: fixed; top: 0; left: 0; width: 100%;
             background: #e67e22; color: #fff; text-align: center; padding: 6px;
-            font-weight: bold; font-size: 13px; z-index: 300;
+            font-weight: bold; font-size: 13px; z-index: 999;
         }
 
-        /* Кнопка звука */
-        #soundToggle {
-            position: fixed; top: 10px; right: 10px; z-index: 120;
-            background: rgba(0,0,0,0.55); border: 2px solid rgba(255,255,255,0.4);
-            color: white; border-radius: 50%; width: 38px; height: 38px;
-            font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center;
-        }
-
-        /* Экран входа */
-        #loginScreen {
+        /* Экран выбора режима (Лобби старта) */
+        #startScreen {
             position: fixed; inset: 0; background: rgba(0,0,0,0.9);
-            display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 200;
-            padding: 20px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 200; padding: 20px; text-align: center;
         }
-        .uno-logo-title {
-            font-size: 54px; font-weight: 900; font-style: italic;
-            color: #f1c40f; text-shadow: 4px 4px 0 #e74c3c, -2px -2px 0 #000;
-            margin-bottom: 20px; letter-spacing: 2px;
+        .logo-title {
+            font-size: 52px; font-weight: 900; color: #f1c40f;
+            text-shadow: 4px 4px 0 #c0392b, -2px -2px 0 #000;
+            transform: rotate(-5deg); margin-bottom: 15px;
         }
-        #loginScreen input {
-            padding: 14px; font-size: 18px; border-radius: 10px; border: none;
-            margin-bottom: 15px; text-align: center; width: 260px;
+        .login-card {
+            background: #1a252f; padding: 22px; border-radius: 16px;
+            border: 2px solid #34495e; width: 100%; max-width: 360px;
+            display: flex; flex-direction: column; gap: 12px;
         }
-        .btn-main {
-            padding: 13px 32px; font-size: 18px; font-weight: bold; border: none;
-            border-radius: 10px; background: linear-gradient(180deg, #f39c12, #d35400);
-            color: #fff; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        .login-card input, .login-card select {
+            padding: 12px; font-size: 16px; border-radius: 10px;
+            border: 2px solid #34495e; background: #2c3e50; color: white; text-align: center;
+        }
+        .btn-mode {
+            padding: 14px; font-size: 17px; font-weight: bold; border: none;
+            border-radius: 10px; cursor: pointer; transition: transform 0.1s;
+        }
+        .btn-mode:active { transform: scale(0.97); }
+        .btn-online { background: linear-gradient(45deg, #2ecc71, #27ae60); color: white; }
+        .btn-offline { background: linear-gradient(45deg, #f39c12, #d35400); color: white; }
+        .offline-box {
+            border-top: 1px solid #34495e; padding-top: 12px;
+            display: flex; flex-direction: column; gap: 8px;
         }
 
         /* Верхняя панель игроков */
-        .top-bar {
-            display: flex; flex-direction: column; align-items: center;
-            padding: 8px 48px 4px 8px; width: 100%;
+        .top-bar { display: flex; flex-direction: column; align-items: center; padding: 8px 6px 0; width: 100%; }
+        .top-controls {
+            display: flex; justify-content: space-between; align-items: center;
+            width: 100%; max-width: 900px; padding: 0 8px 6px; font-size: 13px;
+        }
+        .mode-badge { background: rgba(0,0,0,0.5); padding: 4px 10px; border-radius: 12px; font-weight: bold; }
+        .icon-btn {
+            background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
+            color: white; border-radius: 8px; padding: 4px 10px; cursor: pointer; font-size: 14px;
         }
         .players-list {
             display: flex; gap: 8px; overflow-x: auto; max-width: 100%;
-            padding-bottom: 4px; scrollbar-width: none;
+            padding: 4px 8px; scrollbar-width: none;
         }
         .players-list::-webkit-scrollbar { display: none; }
         .player-badge {
-            background: rgba(0,0,0,0.55); padding: 6px 10px; border-radius: 10px;
-            border: 2px solid rgba(255,255,255,0.15); text-align: center;
-            font-size: 12px; min-width: 85px; flex-shrink: 0;
+            background: rgba(0,0,0,0.55); padding: 6px 12px; border-radius: 12px;
+            border: 2px solid transparent; text-align: center; font-size: 13px;
+            white-space: nowrap; flex-shrink: 0;
         }
         .player-badge.active-turn {
             border-color: #f1c40f; background: rgba(241, 196, 15, 0.25);
-            box-shadow: 0 0 10px rgba(241, 196, 15, 0.5);
+            box-shadow: 0 0 10px rgba(241, 196, 15, 0.4);
         }
-        .player-badge.disconnected { opacity: 0.5; border-style: dashed; }
-        .uno-tag {
-            background: #e74c3c; color: #fff; padding: 1px 5px;
-            border-radius: 4px; font-size: 10px; font-weight: bold; display: inline-block;
+        .uno-tag { background: #e74c3c; padding: 1px 5px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+
+        /* Лобби ожидания в онлайне */
+        #lobbyControls {
+            margin-top: 12px; display: none; flex-wrap: wrap;
+            gap: 8px; justify-content: center;
+        }
+        .btn-small {
+            padding: 9px 16px; font-size: 14px; font-weight: bold; border: none;
+            border-radius: 8px; cursor: pointer;
         }
 
-        /* Игровой стол по центру */
-        .center-area {
-            display: flex; flex-direction: column; align-items: center; gap: 8px;
-        }
+        /* Игровой стол и оригинальные скины карт */
+        .center-area { display: flex; flex-direction: column; align-items: center; gap: 8px; }
         .direction-indicator {
-            font-size: 13px; background: rgba(0,0,0,0.4);
-            padding: 4px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15);
+            font-size: 12px; background: rgba(0,0,0,0.4);
+            padding: 3px 12px; border-radius: 12px;
         }
         .table { display: flex; align-items: center; gap: 22px; }
 
-        /* Оригинальный скин карт UNO */
         .uno-card {
-            width: 82px; height: 122px; border-radius: 12px;
-            background: #fff; padding: 5px;
+            width: 78px; height: 116px; border-radius: 12px;
+            background: #fff; padding: 5px; position: relative;
             box-shadow: 0 6px 14px rgba(0,0,0,0.6);
-            position: relative; flex-shrink: 0;
-            transition: transform 0.15s ease;
+            transition: transform 0.18s ease; flex-shrink: 0;
         }
         .uno-card-inner {
             width: 100%; height: 100%; border-radius: 8px;
@@ -99,412 +110,408 @@
             overflow: hidden;
         }
         .uno-oval {
-            width: 88%; height: 74%; background: #fff;
+            width: 86%; height: 68%; background: white;
             border-radius: 50%; transform: rotate(-28deg);
             display: flex; align-items: center; justify-content: center;
             box-shadow: inset 0 0 4px rgba(0,0,0,0.3);
         }
-        .uno-oval-text {
-            transform: rotate(28deg); font-size: 34px; font-weight: 900;
-            font-style: italic; text-shadow: 2px 2px 0 #000;
+        .uno-center-val {
+            transform: rotate(28deg); font-size: 32px; font-weight: 900;
+            text-shadow: 2px 2px 0 #000, -1px -1px 0 #000;
         }
-        .corner-val {
-            position: absolute; font-size: 14px; font-weight: 900;
-            font-style: italic; color: #fff; text-shadow: 1px 1px 0 #000;
+        .uno-corner {
+            position: absolute; font-size: 13px; font-weight: 900; color: white;
+            text-shadow: 1px 1px 0 #000;
         }
-        .corner-tl { top: 4px; left: 6px; }
-        .corner-br { bottom: 4px; right: 6px; transform: rotate(180deg); }
+        .uno-corner.tl { top: 4px; left: 6px; }
+        .uno-corner.br { bottom: 4px; right: 6px; transform: rotate(180deg); }
 
-        .bg-red { background: #d32f2f; }
-        .txt-red { color: #d32f2f; }
-        .bg-blue { background: #1976d2; }
-        .txt-blue { color: #1976d2; }
-        .bg-green { background: #388e3c; }
-        .txt-green { color: #388e3c; }
-        .bg-yellow { background: #fbc02d; }
-        .txt-yellow { color: #f57f17; }
-        .bg-black { background: #1a1a1a; }
-
-        /* Четырехцветный овал для черных карт */
-        .wild-oval {
+        .c-red .uno-card-inner { background: #d32f2f; }
+        .c-red .uno-center-val { color: #d32f2f; }
+        .c-blue .uno-card-inner { background: #1976d2; }
+        .c-blue .uno-center-val { color: #1976d2; }
+        .c-green .uno-card-inner { background: #388e3c; }
+        .c-green .uno-center-val { color: #388e3c; }
+        .c-yellow .uno-card-inner { background: #fbc02d; }
+        .c-yellow .uno-center-val { color: #fbc02d; }
+        .c-black .uno-card-inner { background: #212121; }
+        .c-black .uno-oval {
             background: conic-gradient(#d32f2f 0deg 90deg, #1976d2 90deg 180deg, #fbc02d 180deg 270deg, #388e3c 270deg 360deg);
-            border: 2px solid #fff;
         }
-        .wild-oval .uno-oval-text { color: #fff; font-size: 28px; }
+        .c-black .uno-center-val { color: white; font-size: 26px; }
 
         /* Рубашка колоды */
-        .deck-back { cursor: pointer; }
-        .deck-back .uno-card-inner { background: #111; }
-        .deck-back .uno-oval { background: #d32f2f; border: 2px solid #fbc02d; }
-        .deck-back .uno-oval-text {
-            color: #fbc02d; font-size: 20px; letter-spacing: 1px;
-            text-shadow: 2px 2px 0 #000;
+        .deck-card { cursor: pointer; }
+        .deck-card:active { transform: scale(0.95); }
+        .deck-card .uno-card-inner { background: #111; }
+        .deck-card .uno-oval { background: #d32f2f; border: 3px solid #fbc02d; }
+        .deck-logo {
+            transform: rotate(28deg); font-size: 19px; font-weight: 900;
+            color: #fbc02d; text-shadow: 2px 2px 0 #000; letter-spacing: 1px;
         }
 
-        /* Чат и адресные стикеры */
+        /* Чат и стикеры */
         .social-panel {
-            width: 95%; max-width: 440px; margin: 0 auto;
-            background: rgba(0,0,0,0.55); border-radius: 12px; padding: 6px 8px;
+            width: 96%; max-width: 460px; background: rgba(0,0,0,0.55);
+            border-radius: 12px; padding: 6px 8px; margin: 0 auto;
             display: flex; flex-direction: column; gap: 5px;
-            border: 1px solid rgba(255,255,255,0.12);
         }
         #chatMessages {
-            height: 52px; overflow-y: auto; font-size: 12px;
-            display: flex; flex-direction: column; gap: 2px; text-align: left;
+            height: 54px; overflow-y: auto; font-size: 12px;
+            display: flex; flex-direction: column; gap: 2px;
         }
-        .taunt-controls {
-            display: flex; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none;
+        .taunt-bar {
+            display: flex; gap: 4px; overflow-x: auto; align-items: center;
+            scrollbar-width: none; padding-bottom: 2px;
         }
-        .taunt-controls::-webkit-scrollbar { display: none; }
-        #tauntTarget {
-            background: #222; color: #f1c40f; border: 1px solid #555;
-            border-radius: 6px; padding: 3px 5px; font-size: 11px; font-weight: bold;
-            max-width: 95px; flex-shrink: 0;
+        .taunt-bar::-webkit-scrollbar { display: none; }
+        .taunt-target {
+            background: #2c3e50; color: white; border: 1px solid #555;
+            border-radius: 6px; padding: 3px 5px; font-size: 11px; flex-shrink: 0;
         }
         .taunt-btn {
-            background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.2);
-            color: #fff; border-radius: 6px; padding: 3px 7px; font-size: 11px;
-            cursor: pointer; white-space: nowrap; flex-shrink: 0;
+            background: rgba(255,255,255,0.14); border: none; border-radius: 6px;
+            color: white; font-size: 12px; padding: 3px 7px; cursor: pointer;
+            white-space: nowrap; flex-shrink: 0;
         }
-        .taunt-btn:active { transform: scale(0.95); }
-        .emoji-strip {
-            display: flex; justify-content: space-between; gap: 2px;
+        .taunt-btn:active { background: rgba(255,255,255,0.35); }
+        .chat-row { display: flex; gap: 5px; }
+        .chat-row input {
+            flex: 1; padding: 5px 8px; border-radius: 6px; border: none;
+            font-size: 12px; background: rgba(255,255,255,0.9);
         }
-        .emoji-btn {
-            background: none; border: none; font-size: 16px; cursor: pointer; padding: 1px 3px;
-        }
-        .chat-input-row { display: flex; gap: 5px; }
-        .chat-input-row input {
-            flex: 1; padding: 5px 8px; border-radius: 6px; border: none; font-size: 12px;
-        }
-        .chat-input-row button {
+        .chat-row button {
             background: #2ecc71; border: none; border-radius: 6px;
             padding: 0 12px; font-weight: bold; cursor: pointer;
         }
 
-        /* Нижняя зона с веером карт */
+        /* Всплывающий баннер стикера по центру экрана */
+        #tauntOverlay {
+            display: none; position: fixed; top: 38%; left: 50%;
+            transform: translate(-50%, -50%) scale(0.5);
+            background: rgba(0,0,0,0.88); border: 3px solid #f1c40f;
+            border-radius: 20px; padding: 16px 28px; text-align: center;
+            z-index: 300; pointer-events: none;
+            animation: popTaunt 2.6s ease forwards;
+        }
+        @keyframes popTaunt {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+            15% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+            80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -60%) scale(0.9); }
+        }
+
+        /* Нижняя панель игрока и веер карт */
         .bottom-area {
             display: flex; flex-direction: column; align-items: center;
             padding-bottom: 10px; width: 100%;
         }
         #unoBtn {
-            background: linear-gradient(45deg, #ff1744, #ff9100); color: white;
-            border: 3px solid white; border-radius: 50px; padding: 7px 26px;
+            background: linear-gradient(45deg, #ff416c, #ff4b2b); color: white;
+            border: 3px solid white; border-radius: 50px; padding: 8px 28px;
             font-size: 16px; font-weight: 900; cursor: pointer; margin-bottom: 8px;
-            box-shadow: 0 4px 12px rgba(255, 23, 68, 0.5);
+            box-shadow: 0 4px 12px rgba(255, 65, 108, 0.5);
         }
-        #unoBtn:disabled { background: #444; box-shadow: none; opacity: 0.4; cursor: not-allowed; }
-        .hand-container {
+        #unoBtn:disabled { background: #555; box-shadow: none; opacity: 0.4; cursor: not-allowed; }
+
+        .hand-wrapper {
             width: 100%; height: 126px; display: flex;
-            align-items: flex-end; justify-content: center; position: relative;
+            justify-content: center; align-items: flex-end; padding: 0 10px;
         }
-        .hand-card-wrap {
-            position: absolute; bottom: 0; transition: transform 0.15s, left 0.15s;
-            cursor: pointer;
-        }
-        .hand-card-wrap:hover { transform: translateY(-16px) !important; z-index: 90 !important; }
+        .hand { display: flex; align-items: flex-end; justify-content: center; position: relative; }
+        .hand .uno-card { cursor: pointer; }
+        .hand .uno-card:hover { transform: translateY(-16px) !important; z-index: 50 !important; }
 
-        /* Огромный всплывающий стикер по центру */
-        #tauntOverlay {
-            display: none; position: fixed; inset: 0; pointer-events: none;
+        /* Модальные окна (выбор цвета и итоги раунда) */
+        .modal-bg {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85);
             align-items: center; justify-content: center; flex-direction: column;
-            z-index: 250; animation: popIn 0.3s ease;
-        }
-        .taunt-popup-box {
-            background: rgba(0,0,0,0.85); border: 4px solid #f1c40f;
-            border-radius: 24px; padding: 18px 30px; text-align: center;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
-        }
-        .taunt-popup-emoji { font-size: 72px; line-height: 1.1; }
-        .taunt-popup-text { font-size: 24px; font-weight: 900; color: #f1c40f; margin-top: 6px; }
-        .taunt-popup-from { font-size: 14px; color: #ddd; margin-top: 4px; }
-        @keyframes popIn {
-            0% { transform: scale(0.3); opacity: 0; }
-            80% { transform: scale(1.08); opacity: 1; }
-            100% { transform: scale(1); }
-        }
-
-        /* Окно выбора цвета и таблица очков */
-        .modal-overlay {
-            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.88);
-            align-items: center; justify-content: center; flex-direction: column;
-            z-index: 180; padding: 20px; text-align: center;
+            z-index: 250; padding: 20px; text-align: center;
         }
         .color-options { display: flex; gap: 15px; margin-top: 20px; }
-        .color-btn {
-            width: 62px; height: 62px; border-radius: 50%;
-            border: 4px solid white; cursor: pointer;
-        }
-        .score-table {
-            background: rgba(255,255,255,0.1); border-radius: 12px;
-            padding: 15px; width: 100%; max-width: 340px; margin: 15px 0;
-        }
-        .score-row {
-            display: flex; justify-content: space-between; padding: 6px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.15); font-size: 16px;
+        .color-btn { width: 62px; height: 62px; border-radius: 50%; border: 4px solid white; cursor: pointer; }
+        .score-box {
+            background: #1a252f; padding: 22px; border-radius: 16px;
+            border: 2px solid #f1c40f; width: 100%; max-width: 340px;
         }
     </style>
 </head>
 <body>
 
-    <div id="reconnectBanner">Связь потеряна. Пытаемся переподключиться...</div>
-    <button id="soundToggle" onclick="toggleSound()">🔊</button>
+    <div id="reconnectBanner">🔌 Связь потеряна. Возвращаем вас за стол...</div>
 
-    <div id="loginScreen">
-        <div class="uno-logo-title">UNO</div>
-        <input type="text" id="nameInput" placeholder="Ваше имя" maxlength="15">
-        <button class="btn-main" onclick="join()">Войти за стол</button>
-    </div>
-
-    <div class="top-bar">
-        <div class="players-list" id="playersList"></div>
-        <div id="lobbyControls" style="margin-top: 10px; display: none;">
-            <button class="btn-main" onclick="startGame()">Начать игру!</button>
+    <!-- Главный экран выбора режима -->
+    <div id="startScreen">
+        <div class="logo-title">UNO</div>
+        <div class="login-card">
+            <input type="text" id="nameInput" placeholder="Ваше имя (например: Ринат)" maxlength="15">
+            
+            <button class="btn-mode btn-online" onclick="startOnline()">🌐 Онлайн с друзьями</button>
+            
+            <div class="offline-box">
+                <div style="font-size: 13px; color: #bdc3c7;">Или сыграйте в одиночку без сети:</div>
+                <select id="botCountSelect">
+                    <option value="1">1 бот (дуэль 1 на 1)</option>
+                    <option value="2">2 бота (стол на 3)</option>
+                    <option value="3" selected>3 бота (классика на 4)</option>
+                    <option value="4">4 бота (стол на 5)</option>
+                    <option value="5">5 ботов (стол на 6)</option>
+                    <option value="7">7 ботов (максимум на 8)</option>
+                </select>
+                <button class="btn-mode btn-offline" onclick="startOffline()">🤖 Офлайн против ботов</button>
+            </div>
         </div>
     </div>
 
+    <!-- Верхняя панель -->
+    <div class="top-bar">
+        <div class="top-controls">
+            <span class="mode-badge" id="modeLabel">Режим</span>
+            <div style="display: flex; gap: 6px;">
+                <button class="icon-btn" id="soundToggle" onclick="toggleSound()">🔊 Звук</button>
+                <button class="icon-btn" onclick="exitToMenu()">🚪 Выход</button>
+            </div>
+        </div>
+        <div class="players-list" id="playersList"></div>
+
+        <div id="lobbyControls">
+            <button class="btn-small" style="background:#2ecc71; color:#000;" onclick="socket.emit('startGame')">▶ Начать матч</button>
+            <button class="btn-small" style="background:#3498db; color:#fff;" onclick="socket.emit('addBot')">+ Бот 🤖</button>
+            <button class="btn-small" style="background:#e74c3c; color:#fff;" onclick="socket.emit('removeBots')">Убрать ботов</button>
+        </div>
+    </div>
+
+    <!-- Игровой стол -->
     <div class="center-area" id="gameTable" style="display: none;">
-        <div class="direction-indicator" id="dirText">По часовой ➡️ (Цель: 250 очков)</div>
+        <div class="direction-indicator" id="dirText">По часовой ➡️</div>
         <div class="table">
-            <div class="uno-card deck-back" onclick="drawCard()">
+            <div class="uno-card deck-card" onclick="handleDrawClick()">
                 <div class="uno-card-inner">
-                    <div class="uno-oval"><span class="uno-oval-text">UNO</span></div>
+                    <div class="uno-oval"><span class="deck-logo">UNO</span></div>
                 </div>
             </div>
             <div id="topCard"></div>
         </div>
     </div>
 
-    <div class="social-panel">
+    <!-- Чат и стикеры -->
+    <div class="social-panel" id="socialPanel" style="display: none;">
         <div id="chatMessages"></div>
-        <div class="taunt-controls">
-            <select id="tauntTarget">
-                <option value="all">Кому: Всем</option>
+        <div class="taunt-bar">
+            <select id="tauntTarget" class="taunt-target">
+                <option value="all">Всем</option>
             </select>
-            <button class="taunt-btn" onclick="sendTaunt('🤡', 'Клоун!')">🤡 Клоун</button>
-            <button class="taunt-btn" onclick="sendTaunt('😭', 'Поплачь!')">😭 Поплачь</button>
-            <button class="taunt-btn" onclick="sendTaunt('🐌', 'Не тормози!')">🐌 Нуб</button>
-            <button class="taunt-btn" onclick="sendTaunt('🥱', 'Скучно...')">🥱 Скучно</button>
-            <button class="taunt-btn" onclick="sendTaunt('🔥', 'Красава!')">🔥 Огонь</button>
+            <button class="taunt-btn" onclick="sendTaunt('🤡 Клоун!')">🤡 Клоун</button>
+            <button class="taunt-btn" onclick="sendTaunt('😭 Поплачь!')">😭 Поплачь</button>
+            <button class="taunt-btn" onclick="sendTaunt('🐌 Нуб!')">🐌 Нуб</button>
+            <button class="taunt-btn" onclick="sendTaunt('💀 RIP')">💀 RIP</button>
+            <button class="taunt-btn" onclick="sendTaunt('🥱 Скучно...')">🥱 Скучно</button>
+            <button class="taunt-btn" onclick="sendTaunt('🔥 Красава!')">🔥 Красава</button>
         </div>
-        <div class="emoji-strip">
-            <button class="emoji-btn" onclick="sendChatText('😂')">😂</button>
-            <button class="emoji-btn" onclick="sendChatText('😡')">😡</button>
-            <button class="emoji-btn" onclick="sendChatText('😱')">😱</button>
-            <button class="emoji-btn" onclick="sendChatText('😭')">😭</button>
-            <button class="emoji-btn" onclick="sendChatText('😈')">😈</button>
-            <button class="emoji-btn" onclick="sendChatText('🤡')">🤡</button>
-            <button class="emoji-btn" onclick="sendChatText('🔥')">🔥</button>
-            <button class="emoji-btn" onclick="sendChatText('👍')">👍</button>
-            <button class="emoji-btn" onclick="sendChatText('🎉')">🎉</button>
-            <button class="emoji-btn" onclick="sendChatText('👀')">👀</button>
-        </div>
-        <div class="chat-input-row">
+        <div class="chat-row" id="chatInputRow">
             <input type="text" id="chatInput" placeholder="Написать в чат..." onkeydown="if(event.key==='Enter') sendChat()">
             <button onclick="sendChat()">➤</button>
         </div>
     </div>
 
+    <!-- Нижняя панель игрока -->
     <div class="bottom-area">
-        <button id="unoBtn" onclick="sayUno()" disabled style="display: none;">КРИКНУТЬ УНО!</button>
-        <div class="hand-container" id="hand"></div>
+        <button id="unoBtn" onclick="handleUnoClick()" disabled style="display: none;">КРИКНУТЬ УНО!</button>
+        <div class="hand-wrapper">
+            <div class="hand" id="hand"></div>
+        </div>
     </div>
 
     <!-- Всплывающий стикер -->
     <div id="tauntOverlay">
-        <div class="taunt-popup-box">
-            <div class="taunt-popup-emoji" id="tauntEmoji">🤡</div>
-            <div class="taunt-popup-text" id="tauntText">Клоун!</div>
-            <div class="taunt-popup-from" id="tauntFrom">от Игрока</div>
-        </div>
+        <div id="tauntFrom" style="font-size: 13px; color: #f1c40f; margin-bottom: 4px;"></div>
+        <div id="tauntText" style="font-size: 30px; font-weight: 900;"></div>
     </div>
 
     <!-- Выбор цвета -->
-    <div class="modal-overlay" id="colorPicker">
+    <div class="modal-bg" id="colorPicker">
         <h2>Выберите цвет:</h2>
         <div class="color-options">
-            <div class="color-btn bg-red" onclick="selectColor('red')"></div>
-            <div class="color-btn bg-blue" onclick="selectColor('blue')"></div>
-            <div class="color-btn bg-green" onclick="selectColor('green')"></div>
-            <div class="color-btn bg-yellow" onclick="selectColor('yellow')"></div>
+            <div class="color-btn" style="background:#d32f2f" onclick="confirmColor('red')"></div>
+            <div class="color-btn" style="background:#1976d2" onclick="confirmColor('blue')"></div>
+            <div class="color-btn" style="background:#388e3c" onclick="confirmColor('green')"></div>
+            <div class="color-btn" style="background:#fbc02d" onclick="confirmColor('yellow')"></div>
         </div>
     </div>
 
-    <!-- Таблица раунда / матча -->
-    <div class="modal-overlay" id="scoreModal">
-        <h2 id="scoreTitle">Раунд окончен!</h2>
-        <div id="scoreSubtitle" style="color: #f1c40f; font-weight: bold;"></div>
-        <div class="score-table" id="scoreTableBody"></div>
-        <button class="btn-main" id="newMatchBtn" style="display: none;" onclick="location.reload()">Новая игра</button>
+    <!-- Таблица очков -->
+    <div class="modal-bg" id="scoreModal">
+        <div class="score-box">
+            <h2 id="scoreTitle" style="color:#f1c40f; margin-top:0;">Раунд окончен!</h2>
+            <div id="scoreSubtitle" style="margin-bottom:12px; font-size:14px;"></div>
+            <div id="scoreList" style="text-align:left; margin-bottom:16px; line-height:1.7;"></div>
+            <button id="scoreNextBtn" class="btn-mode btn-online" style="width:100%; display:none;" onclick="nextOfflineRound()">Следующий раунд</button>
+        </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        const socket = io();
+        const socket = io({ autoConnect: false });
+        let gameMode = null; // 'online' или 'offline'
+        let soundEnabled = true;
         let isMyTurn = false;
         let pendingWildIndex = null;
-        let soundEnabled = true;
-        let audioCtx = null;
-        let tauntTimeout = null;
 
-        // Уникальный ID игрока для автовозврата при обрыве связи
-        let myPlayerId = localStorage.getItem('uno_player_id');
-        if (!myPlayerId) {
-            myPlayerId = 'p_' + Math.random().toString(36).substr(2, 12);
-            localStorage.setItem('uno_player_id', myPlayerId);
+        // Уникальный ID игрока для автовозврата в онлайн
+        let myUid = localStorage.getItem('uno_uid');
+        if (!myUid) {
+            myUid = 'u_' + Math.random().toString(36).slice(2, 11);
+            localStorage.setItem('uno_uid', myUid);
         }
-
-        const savedName = localStorage.getItem('uno_player_name');
+        const savedName = localStorage.getItem('uno_name');
         if (savedName) document.getElementById('nameInput').value = savedName;
 
-        // Загрузка пользовательских MP3-файлов
-        const customSounds = {
-            plus2: new Audio('/plus2.mp3'),
-            plus4: new Audio('/plus4.mp3'),
-            uno: new Audio('/uno.mp3'),
-            wild: new Audio('/wild.mp3')
+        // Предзагрузка ваших MP3 файлов
+        const customAudio = {
+            plus2: new Audio('plus2.mp3'),
+            plus4: new Audio('plus4.mp3'),
+            uno: new Audio('uno.mp3'),
+            wild: new Audio('wild.mp3')
         };
 
         function unlockAudio() {
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-            Object.values(customSounds).forEach(audio => {
-                audio.load();
+            Object.values(customAudio).forEach(a => {
+                a.volume = 0.85;
+                a.load();
             });
+        }
+
+        function playSound(type) {
+            if (!soundEnabled) return;
+            if (customAudio[type]) {
+                customAudio[type].currentTime = 0;
+                customAudio[type].play().catch(() => {});
+                return;
+            }
+            // Легкий синтезатор для обычного хода и взятия карты
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.frequency.value = type === 'draw' ? 280 : 460;
+                gain.gain.setValueAtTime(0.08, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.12);
+            } catch (e) {}
         }
 
         function toggleSound() {
             soundEnabled = !soundEnabled;
-            document.getElementById('soundToggle').innerText = soundEnabled ? '🔊' : '🔇';
+            document.getElementById('soundToggle').innerText = soundEnabled ? '🔊 Звук' : '🔇 Без звука';
         }
 
-        function playSynthTone(freq, type, duration, delay = 0) {
-            if (!soundEnabled || !audioCtx) return;
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.type = type;
-            osc.frequency.setValueAtTime(freq, audioCtx.currentTime + delay);
-            gain.gain.setValueAtTime(0.15, audioCtx.currentTime + delay);
-            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + duration);
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.start(audioCtx.currentTime + delay);
-            osc.stop(audioCtx.currentTime + delay + duration);
+        function exitToMenu() {
+            location.reload();
         }
 
-        function playEffect(type) {
-            if (!soundEnabled) return;
-            if (customSounds[type]) {
-                customSounds[type].currentTime = 0;
-                customSounds[type].play().catch(() => {
-                    // Запасной синтезированный звук, если MP3 еще не загружен на сервер
-                    if (type === 'plus4') { playSynthTone(130, 'sawtooth', 0.4); playSynthTone(95, 'sawtooth', 0.5, 0.15); }
-                    else if (type === 'plus2') { playSynthTone(320, 'square', 0.25); playSynthTone(240, 'square', 0.3, 0.12); }
-                    else if (type === 'uno') { playSynthTone(523, 'triangle', 0.2); playSynthTone(659, 'triangle', 0.2, 0.1); playSynthTone(784, 'triangle', 0.4, 0.2); }
-                    else if (type === 'wild') { playSynthTone(440, 'sine', 0.2); playSynthTone(554, 'sine', 0.2, 0.1); playSynthTone(659, 'sine', 0.3, 0.2); }
-                });
-                return;
-            }
-            if (type === 'card') {
-                playSynthTone(260, 'triangle', 0.08);
-            } else if (type === 'turn') {
-                playSynthTone(587, 'sine', 0.12);
-                playSynthTone(880, 'sine', 0.18, 0.08);
-            } else if (type === 'start') {
-                playSynthTone(440, 'triangle', 0.15);
-                playSynthTone(554, 'triangle', 0.15, 0.12);
-                playSynthTone(659, 'triangle', 0.25, 0.24);
-            }
-        }
-
-        function join() {
-            unlockAudio();
-            const name = document.getElementById('nameInput').value.trim();
-            if (name) localStorage.setItem('uno_player_name', name);
-            socket.emit('joinGame', { playerId: myPlayerId, playerName: name });
-            document.getElementById('loginScreen').style.display = 'none';
-        }
-
-        socket.on('connect', () => {
-            document.getElementById('reconnectBanner').style.display = 'none';
-            if (document.getElementById('loginScreen').style.display === 'none') {
-                const name = localStorage.getItem('uno_player_name') || '';
-                socket.emit('joinGame', { playerId: myPlayerId, playerName: name });
-            }
-        });
-
-        socket.on('disconnect', () => {
-            document.getElementById('reconnectBanner').style.display = 'block';
-        });
-
-        function startGame() {
-            unlockAudio();
-            socket.emit('startGame');
-        }
-
-        function buildCardHTML(card) {
-            const isWild = card.value === '🌈' || card.value === '+4';
-            const ovalClass = isWild ? 'uno-oval wild-oval' : 'uno-oval';
-            const txtClass = isWild ? '' : `txt-${card.color}`;
+        // Отрисовка оригинальной карты UNO
+        function createCardHTML(card) {
             return `
-                <div class="uno-card">
-                    <div class="uno-card-inner bg-${card.color}">
-                        <span class="corner-val corner-tl">${card.value}</span>
-                        <div class="${ovalClass}">
-                            <span class="uno-oval-text ${txtClass}">${card.value}</span>
+                <div class="uno-card c-${card.color}">
+                    <div class="uno-card-inner">
+                        <span class="uno-corner tl">${card.value}</span>
+                        <div class="uno-oval">
+                            <span class="uno-center-val">${card.value}</span>
                         </div>
-                        <span class="corner-val corner-br">${card.value}</span>
+                        <span class="uno-corner br">${card.value}</span>
                     </div>
                 </div>
             `;
         }
 
-        socket.on('gameState', (state) => {
-            document.getElementById('scoreModal').style.display = 'none';
-            const wasMyTurn = isMyTurn;
-            isMyTurn = state.isMyTurn;
+        // Адаптивный веер карт под ширину экрана телефона
+        function renderHand(hand) {
+            const handDiv = document.getElementById('hand');
+            handDiv.innerHTML = '';
+            const count = hand.length;
+            if (count === 0) return;
 
-            if (isMyTurn && !wasMyTurn && state.gameStarted) {
-                playEffect('turn');
+            const screenW = window.innerWidth - 24;
+            const cardW = 78;
+            let overlap = 0;
+            if (count * cardW > screenW && count > 1) {
+                const visibleStep = (screenW - cardW) / (count - 1);
+                overlap = Math.max(visibleStep - cardW, -58);
             }
 
-            // Список игроков сверху и обновление выпадающего списка адресатов
-            const pList = document.getElementById('playersList');
-            const targetSelect = document.getElementById('tauntTarget');
-            const prevTarget = targetSelect.value;
-
-            pList.innerHTML = '';
-            targetSelect.innerHTML = '<option value="all">Кому: Всем</option>';
-
-            state.playersList.forEach(p => {
-                const div = document.createElement('div');
-                div.className = 'player-badge' +
-                    (p.isTurn ? ' active-turn' : '') +
-                    (p.disconnected ? ' disconnected' : '');
-                div.innerHTML = `<b>${p.name}${p.isMe ? ' (Вы)' : ''}${p.disconnected ? ' 🔌' : ''}</b><br>` +
-                                `Карт: ${p.count} | Очки: ${p.score} ` +
-                                (p.saidUno ? '<br><span class="uno-tag">УНО!</span>' : '');
-                pList.appendChild(div);
-
-                if (!p.isMe) {
-                    const opt = document.createElement('option');
-                    opt.value = p.id;
-                    opt.innerText = `Для: ${p.name}`;
-                    targetSelect.appendChild(opt);
+            hand.forEach((card, idx) => {
+                const wrapper = document.createElement('div');
+                wrapper.innerHTML = createCardHTML(card).trim();
+                const cardEl = wrapper.firstChild;
+                if (idx > 0 && overlap < 0) {
+                    cardEl.style.marginLeft = `${overlap}px`;
                 }
+                cardEl.style.zIndex = idx + 1;
+                cardEl.onclick = () => onCardClick(card, idx);
+                handDiv.appendChild(cardEl);
             });
+        }
 
-            if ([...targetSelect.options].some(o => o.value === prevTarget)) {
-                targetSelect.value = prevTarget;
+        function showTaunt(from, text, isPrivate) {
+            const overlay = document.getElementById('tauntOverlay');
+            document.getElementById('tauntFrom').innerText = isPrivate ? `Лично от ${from}:` : `${from} говорит:`;
+            document.getElementById('tauntText').innerText = text;
+            overlay.style.display = 'none';
+            void overlay.offsetWidth;
+            overlay.style.display = 'block';
+        }
+
+        function addChatLine(sender, text, isSystem) {
+            const box = document.getElementById('chatMessages');
+            const line = document.createElement('div');
+            line.innerHTML = isSystem
+                ? `<span style="color:#f1c40f">${text}</span>`
+                : `<b>${sender}:</b> ${text}`;
+            box.appendChild(line);
+            box.scrollTop = box.scrollHeight;
+        }
+
+        // ================= ОНЛАЙН РЕЖИМ =================
+        function startOnline() {
+            const name = document.getElementById('nameInput').value.trim() || 'Игрок';
+            localStorage.setItem('uno_name', name);
+            unlockAudio();
+
+            gameMode = 'online';
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('modeLabel').innerText = '🌐 Онлайн';
+            document.getElementById('socialPanel').style.display = 'flex';
+
+            socket.connect();
+            socket.emit('joinOnline', { uid: myUid, name });
+        }
+
+        socket.on('disconnect', () => {
+            if (gameMode === 'online') document.getElementById('reconnectBanner').style.display = 'block';
+        });
+
+        socket.on('connect', () => {
+            document.getElementById('reconnectBanner').style.display = 'none';
+            if (gameMode === 'online') {
+                const name = localStorage.getItem('uno_name') || 'Игрок';
+                socket.emit('joinOnline', { uid: myUid, name });
             }
+        });
+
+        socket.on('gameState', (state) => {
+            if (gameMode !== 'online') return;
+            isMyTurn = state.isMyTurn;
+            if (state.soundEvent) playSound(state.soundEvent);
+
+            updatePlayersUI(state.playersList);
 
             if (!state.gameStarted) {
-                document.getElementById('lobbyControls').style.display = state.playersList.length >= 2 ? 'block' : 'none';
+                document.getElementById('lobbyControls').style.display = 'flex';
                 document.getElementById('gameTable').style.display = 'none';
                 document.getElementById('unoBtn').style.display = 'none';
-                document.getElementById('hand').innerHTML = '';
                 return;
             }
 
@@ -512,143 +519,329 @@
             document.getElementById('gameTable').style.display = 'flex';
             document.getElementById('unoBtn').style.display = 'block';
 
-            document.getElementById('dirText').innerText = (state.direction === 1 ? 'По часовой ➡️' : 'Против часовой ⬅️') +
-                ` | До ${state.targetScore} очков`;
+            document.getElementById('dirText').innerText = state.direction === 1 ? 'По часовой ➡️' : 'Против часовой ⬅️';
+            document.getElementById('topCard').innerHTML = createCardHTML(state.currentCard);
 
             const unoBtn = document.getElementById('unoBtn');
             unoBtn.disabled = !(state.hand.length <= 2 && !state.saidUno);
             unoBtn.innerText = state.saidUno ? 'УНО СКАЗАНО!' : 'КРИКНУТЬ УНО!';
 
-            document.getElementById('topCard').innerHTML = buildCardHTML(state.currentCard);
-
-            // Адаптивный веер карт в руке под ширину любого экрана
-            const handDiv = document.getElementById('hand');
-            handDiv.innerHTML = '';
-            const count = state.hand.length;
-            if (count > 0) {
-                const screenW = window.innerWidth - 20;
-                const cardW = 82;
-                let step = 46;
-                if (cardW + (count - 1) * step > screenW) {
-                    step = Math.max(16, (screenW - cardW) / Math.max(1, count - 1));
-                }
-                const totalW = cardW + (count - 1) * step;
-                const startX = (window.innerWidth - totalW) / 2;
-
-                state.hand.forEach((card, index) => {
-                    const wrap = document.createElement('div');
-                    wrap.className = 'hand-card-wrap';
-                    wrap.style.left = `${startX + index * step}px`;
-                    wrap.style.zIndex = index + 1;
-                    wrap.innerHTML = buildCardHTML(card);
-                    wrap.onclick = () => {
-                        unlockAudio();
-                        if (!isMyTurn) return;
-                        if (card.color === 'black') {
-                            pendingWildIndex = index;
-                            document.getElementById('colorPicker').style.display = 'flex';
-                        } else {
-                            socket.emit('playCard', { cardIndex: index });
-                        }
-                    };
-                    handDiv.appendChild(wrap);
-                });
-            }
+            renderHand(state.hand);
         });
 
-        function selectColor(color) {
-            document.getElementById('colorPicker').style.display = 'none';
-            if (pendingWildIndex !== null) {
-                socket.emit('playCard', { cardIndex: pendingWildIndex, chosenColor: color });
-                pendingWildIndex = null;
+        function updatePlayersUI(list) {
+            const pList = document.getElementById('playersList');
+            const targetSel = document.getElementById('tauntTarget');
+            const prevTarget = targetSel.value;
+
+            pList.innerHTML = '';
+            targetSel.innerHTML = '<option value="all">Всем</option>';
+
+            list.forEach(p => {
+                const div = document.createElement('div');
+                div.className = 'player-badge' + (p.isTurn ? ' active-turn' : '');
+                const connIcon = p.disconnected ? '🔌 ' : '';
+                div.innerHTML = `<b>${connIcon}${p.name}${p.isMe ? ' (Вы)' : ''}</b><br>` +
+                                `Карт: ${p.count} | Очки: ${p.score} ` +
+                                (p.saidUno ? '<span class="uno-tag">УНО!</span>' : '');
+                pList.appendChild(div);
+
+                if (!p.isMe) {
+                    const opt = document.createElement('option');
+                    opt.value = p.uid;
+                    opt.innerText = p.name;
+                    targetSel.appendChild(opt);
+                }
+            });
+            if ([...targetSel.options].some(o => o.value === prevTarget)) targetSel.value = prevTarget;
+        }
+
+        socket.on('chatMessage', (m) => addChatLine(m.sender, m.text, m.isSystem));
+        socket.on('tauntPopup', (t) => showTaunt(t.from, t.text, t.isPrivate));
+        socket.on('alertMsg', (msg) => alert(msg));
+        socket.on('errorMsg', (msg) => { alert(msg); location.reload(); });
+
+        socket.on('roundOver', (data) => {
+            showScoreModal(`Раунд взял: ${data.winner}!`, `+${data.points} очков за раунд`, data.scores, false);
+            setTimeout(() => { document.getElementById('scoreModal').style.display = 'none'; }, 4300);
+        });
+
+        socket.on('matchOver', (data) => {
+            showScoreModal(`🏆 Чемпион: ${data.winner}!`, 'Достигнут лимит 250 очков!', data.scores, false);
+            setTimeout(() => location.reload(), 6000);
+        });
+
+        function showScoreModal(title, subtitle, scores, showBtn) {
+            document.getElementById('scoreTitle').innerText = title;
+            document.getElementById('scoreSubtitle').innerText = subtitle;
+            document.getElementById('scoreList').innerHTML = scores
+                .sort((a, b) => b.score - a.score)
+                .map(s => `<div>• <b>${s.name}</b>: ${s.score} очков</div>`).join('');
+            document.getElementById('scoreNextBtn').style.display = showBtn ? 'block' : 'none';
+            document.getElementById('scoreModal').style.display = 'flex';
+        }
+
+        // ================= ОФЛАЙН РЕЖИМ (ЛОКАЛЬНЫЙ ДВИЖОК) =================
+        let offPlayers = [];
+        let offDeck = [];
+        let offTopCard = null;
+        let offTurn = 0;
+        let offDir = 1;
+        let offTimer = null;
+
+        function startOffline() {
+            const name = document.getElementById('nameInput').value.trim() || 'Вы';
+            const botCount = parseInt(document.getElementById('botCountSelect').value, 10);
+            localStorage.setItem('uno_name', name);
+            unlockAudio();
+
+            gameMode = 'offline';
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('modeLabel').innerText = `🤖 Офлайн (${botCount} ботов)`;
+            document.getElementById('gameTable').style.display = 'flex';
+            document.getElementById('unoBtn').style.display = 'block';
+            document.getElementById('socialPanel').style.display = 'flex';
+            document.getElementById('chatInputRow').style.display = 'none';
+
+            const names = ['Терминатор 🤖', 'Альтрон 🤖', 'Валли 🤖', 'R2-D2 🤖', 'Бендер 🤖', 'Джарвис 🤖', 'Скайнет 🤖'];
+            offPlayers = [{ uid: 'me', name, hand: [], score: 0, saidUno: false, isBot: false, isMe: true }];
+            for (let i = 0; i < botCount; i++) {
+                offPlayers.push({ uid: 'b' + i, name: names[i], hand: [], score: 0, saidUno: false, isBot: true, isMe: false });
+            }
+            nextOfflineRound();
+        }
+
+        function buildOfflineDeck() {
+            const cols = ['red', 'blue', 'green', 'yellow'];
+            offDeck = [];
+            for (let c of cols) {
+                offDeck.push({ color: c, value: '0', type: 'number' });
+                for (let n = 1; n <= 9; n++) {
+                    offDeck.push({ color: c, value: String(n), type: 'number' });
+                    offDeck.push({ color: c, value: String(n), type: 'number' });
+                }
+                for (let k = 0; k < 2; k++) {
+                    offDeck.push({ color: c, value: '+2', type: 'draw2' });
+                    offDeck.push({ color: c, value: '🚫', type: 'skip' });
+                    offDeck.push({ color: c, value: '🔄', type: 'reverse' });
+                }
+            }
+            for (let k = 0; k < 4; k++) {
+                offDeck.push({ color: 'black', value: '🌈', type: 'wild' });
+                offDeck.push({ color: 'black', value: '+4', type: 'wild4' });
+            }
+            offDeck.sort(() => Math.random() - 0.5);
+        }
+
+        function drawOff(cnt) {
+            let res = [];
+            for (let i = 0; i < cnt; i++) {
+                if (offDeck.length === 0) buildOfflineDeck();
+                res.push(offDeck.pop());
+            }
+            return res;
+        }
+
+        function nextOfflineRound() {
+            document.getElementById('scoreModal').style.display = 'none';
+            buildOfflineDeck();
+            offDir = 1;
+            offTurn = 0;
+            offPlayers.forEach(p => { p.hand = drawOff(7); p.saidUno = false; });
+            do { offTopCard = offDeck.pop(); } while (offTopCard.color === 'black');
+            renderOffline();
+        }
+
+        function renderOffline() {
+            isMyTurn = (offTurn === 0);
+            updatePlayersUI(offPlayers.map((p, idx) => ({
+                uid: p.uid, name: p.name, count: p.hand.length,
+                score: p.score, saidUno: p.saidUno, isTurn: idx === offTurn, isMe: p.isMe
+            })));
+
+            document.getElementById('dirText').innerText = offDir === 1 ? 'По часовой ➡️' : 'Против часовой ⬅️';
+            document.getElementById('topCard').innerHTML = createCardHTML(offTopCard);
+
+            const me = offPlayers[0];
+            const unoBtn = document.getElementById('unoBtn');
+            unoBtn.disabled = !(me.hand.length <= 2 && !me.saidUno);
+            unoBtn.innerText = me.saidUno ? 'УНО СКАЗАНО!' : 'КРИКНУТЬ УНО!';
+
+            renderHand(me.hand);
+
+            if (offPlayers[offTurn].isBot) {
+                if (offTimer) clearTimeout(offTimer);
+                offTimer = setTimeout(botStepOffline, 1200);
             }
         }
 
-        function drawCard() {
-            unlockAudio();
-            if (isMyTurn) socket.emit('drawCard');
+        function nextOffIdx(step = 1) {
+            const len = offPlayers.length;
+            return (offTurn + step * offDir + len * 100) % len;
         }
 
-        function sayUno() {
-            unlockAudio();
-            socket.emit('sayUno');
+        function playOffCard(pIdx, cIdx, chosenCol) {
+            const p = offPlayers[pIdx];
+            const card = p.hand[cIdx];
+            p.hand.splice(cIdx, 1);
+            offTopCard = { ...card };
+
+            let snd = 'play';
+            if (card.color === 'black') {
+                offTopCard.color = chosenCol || 'red';
+                if (card.type === 'wild') snd = 'wild';
+            }
+
+            if (p.hand.length === 0) {
+                if (!p.saidUno && !p.isBot) {
+                    p.hand.push(...drawOff(2));
+                    alert('Вы забыли нажать УНО! Штраф +2 карты.');
+                } else {
+                    let pts = 0;
+                    offPlayers.forEach((pl, i) => {
+                        if (i !== pIdx) {
+                            pts += pl.hand.reduce((s, c) => s + (c.type === 'number' ? +c.value : (c.color === 'black' ? 50 : 20)), 0);
+                        }
+                    });
+                    p.score += pts;
+                    if (p.score >= 250) {
+                        showScoreModal(`🏆 Победитель: ${p.name}!`, 'Набрано 250 очков!', offPlayers, false);
+                        setTimeout(() => location.reload(), 5000);
+                    } else {
+                        showScoreModal(`Раунд взял: ${p.name}!`, `+${pts} очков`, offPlayers, true);
+                    }
+                    return;
+                }
+            }
+
+            if (p.hand.length > 1) p.saidUno = false;
+            const victim = offPlayers[nextOffIdx(1)];
+
+            if (card.type === 'reverse') {
+                offTurn = offPlayers.length === 2 ? nextOffIdx(2) : (offDir *= -1, nextOffIdx(1));
+            } else if (card.type === 'skip') {
+                offTurn = nextOffIdx(2);
+            } else if (card.type === 'draw2') {
+                snd = 'plus2';
+                victim.hand.push(...drawOff(2));
+                victim.saidUno = false;
+                if (victim.isMe) showTaunt(p.name, '😈 Лови +2!', true);
+                offTurn = nextOffIdx(2);
+            } else if (card.type === 'wild4') {
+                snd = 'plus4';
+                victim.hand.push(...drawOff(4));
+                victim.saidUno = false;
+                if (victim.isMe) showTaunt(p.name, '💀 Лови +4!', true);
+                offTurn = nextOffIdx(2);
+            } else {
+                offTurn = nextOffIdx(1);
+            }
+
+            playSound(snd);
+            renderOffline();
+        }
+
+        function botStepOffline() {
+            const bot = offPlayers[offTurn];
+            if (!bot || !bot.isBot) return;
+            const valid = [];
+            bot.hand.forEach((c, i) => {
+                if (c.color === 'black' || c.color === offTopCard.color || c.value === offTopCard.value) valid.push(i);
+            });
+            if (valid.length > 0) {
+                valid.sort((a, b) => (bot.hand[a].color === 'black' ? 1 : -1));
+                const idx = valid[0];
+                const card = bot.hand[idx];
+                let col = 'red';
+                if (card.color === 'black') {
+                    const cnt = { red: 0, blue: 0, green: 0, yellow: 0 };
+                    bot.hand.forEach(c => { if (cnt[c.color] !== undefined) cnt[c.color]++; });
+                    col = Object.keys(cnt).reduce((a, b) => cnt[a] > cnt[b] ? a : b);
+                }
+                if (bot.hand.length === 2) {
+                    bot.saidUno = true;
+                    addChatLine('Система', `🔥 ${bot.name} кричит УНО!`, true);
+                    playSound('uno');
+                }
+                playOffCard(offTurn, idx, col);
+            } else {
+                bot.hand.push(...drawOff(1));
+                bot.saidUno = false;
+                offTurn = nextOffIdx(1);
+                playSound('draw');
+                renderOffline();
+            }
+        }
+
+        // ================= ОБЩИЕ ДЕЙСТВИЯ ИГРОКА =================
+        function onCardClick(card, index) {
+            if (!isMyTurn) return;
+            const top = gameMode === 'offline' ? offTopCard : null;
+            if (gameMode === 'offline') {
+                const ok = card.color === 'black' || card.color === top.color || card.value === top.value;
+                if (!ok) return;
+            }
+            if (card.color === 'black') {
+                pendingWildIndex = index;
+                document.getElementById('colorPicker').style.display = 'flex';
+            } else {
+                if (gameMode === 'online') socket.emit('playCard', { cardIndex: index });
+                else playOffCard(0, index, null);
+            }
+        }
+
+        function confirmColor(color) {
+            document.getElementById('colorPicker').style.display = 'none';
+            if (pendingWildIndex === null) return;
+            if (gameMode === 'online') socket.emit('playCard', { cardIndex: pendingWildIndex, chosenColor: color });
+            else playOffCard(0, pendingWildIndex, color);
+            pendingWildIndex = null;
+        }
+
+        function handleDrawClick() {
+            if (!isMyTurn) return;
+            if (gameMode === 'online') {
+                socket.emit('drawCard');
+            } else {
+                offPlayers[0].hand.push(...drawOff(1));
+                offPlayers[0].saidUno = false;
+                offTurn = nextOffIdx(1);
+                playSound('draw');
+                renderOffline();
+            }
+        }
+
+        function handleUnoClick() {
+            if (gameMode === 'online') {
+                socket.emit('sayUno');
+            } else if (offPlayers[0].hand.length <= 2) {
+                offPlayers[0].saidUno = true;
+                playSound('uno');
+                addChatLine('Система', '🔥 Вы крикнули УНО!', true);
+                renderOffline();
+            }
         }
 
         function sendChat() {
-            const input = document.getElementById('chatInput');
-            if (input.value.trim()) {
-                socket.emit('sendChat', input.value);
-                input.value = '';
+            const inp = document.getElementById('chatInput');
+            if (inp.value.trim() && gameMode === 'online') {
+                socket.emit('sendChat', inp.value);
+                inp.value = '';
             }
         }
 
-        function sendChatText(txt) {
-            socket.emit('sendChat', txt);
+        function sendTaunt(text) {
+            const targetUid = document.getElementById('tauntTarget').value;
+            if (gameMode === 'online') {
+                socket.emit('sendTaunt', { targetUid, text });
+            } else {
+                addChatLine('Вы', `Отправили стикер «${text}»`, true);
+            }
         }
 
-        function sendTaunt(emoji, text) {
-            const targetId = document.getElementById('tauntTarget').value;
-            socket.emit('sendTaunt', { targetId, emoji, text });
-        }
-
-        socket.on('playSound', (type) => playEffect(type));
-
-        socket.on('tauntSticker', ({ sender, emoji, text, isPrivate }) => {
-            const overlay = document.getElementById('tauntOverlay');
-            document.getElementById('tauntEmoji').innerText = emoji;
-            document.getElementById('tauntText').innerText = text;
-            document.getElementById('tauntFrom').innerText = isPrivate
-                ? `Лично вам от ${sender}`
-                : `Всем от ${sender}`;
-
-            overlay.style.display = 'flex';
-            clearTimeout(tauntTimeout);
-            tauntTimeout = setTimeout(() => {
-                overlay.style.display = 'none';
-            }, 2400);
+        window.addEventListener('resize', () => {
+            if (gameMode === 'offline' && offPlayers[0]) renderHand(offPlayers[0].hand);
         });
-
-        socket.on('chatMessage', (msg) => {
-            const box = document.getElementById('chatMessages');
-            const line = document.createElement('div');
-            line.innerHTML = msg.isSystem
-                ? `<span style="color:#f1c40f">${msg.text}</span>`
-                : `<b>${msg.sender}:</b> ${msg.text}`;
-            box.appendChild(line);
-            box.scrollTop = box.scrollHeight;
-        });
-
-        function renderScoreboard(scoreboard) {
-            const body = document.getElementById('scoreTableBody');
-            body.innerHTML = '';
-            scoreboard.forEach((row, i) => {
-                const div = document.createElement('div');
-                div.className = 'score-row';
-                div.innerHTML = `<span>${i + 1}. ${row.name}</span><b>${row.score} очк.</b>`;
-                body.appendChild(div);
-            });
-        }
-
-        socket.on('roundOver', ({ winner, roundPoints, scoreboard }) => {
-            playEffect('start');
-            document.getElementById('scoreTitle').innerText = `Раунд выиграл ${winner}!`;
-            document.getElementById('scoreSubtitle').innerText = `+${roundPoints} очков! Следующий раунд через 4 сек...`;
-            document.getElementById('newMatchBtn').style.display = 'none';
-            renderScoreboard(scoreboard);
-            document.getElementById('scoreModal').style.display = 'flex';
-        });
-
-        socket.on('matchOver', ({ winner, roundPoints, scoreboard }) => {
-            playEffect('uno');
-            document.getElementById('scoreTitle').innerText = `🏆 ПОБЕДИТЕЛЬ МАТЧА: ${winner}!`;
-            document.getElementById('scoreSubtitle').innerText = `Набрано 250+ очков (+${roundPoints} в финале)`;
-            document.getElementById('newMatchBtn').style.display = 'inline-block';
-            renderScoreboard(scoreboard);
-            document.getElementById('scoreModal').style.display = 'flex';
-        });
-
-        socket.on('alertMsg', (msg) => alert(msg));
-        socket.on('errorMsg', (msg) => { alert(msg); location.reload(); });
     </script>
 </body>
 </html>
